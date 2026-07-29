@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.pub-cache/
+.pub/
+
+# Build outputs
+dist/
+build/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugin-dependencies
+.flutter-plugins-dependencies
+.packages
+
+# Environment & Local Configuration
+.env
+*.env.local
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
