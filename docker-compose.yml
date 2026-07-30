@@ -37,6 +37,19 @@ services:
     depends_on:
       - backend
 
+  # Mobile Flutter Web PWA Service
+  mobile:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile
+    container_name: fid_mobile_pwa
+    restart: always
+    ports:
+      - "${MOBILE_PORT:-3001}:80"
+    depends_on:
+      - backend
+
 volumes:
   backend_uploads:
+
 

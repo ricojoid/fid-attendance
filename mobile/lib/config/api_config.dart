@@ -2,12 +2,7 @@ import 'package:flutter/foundation.dart';
 
 class ApiConfig {
   // Use http://localhost:8080/api/v1 for Web (Chrome) & Desktop, or 10.0.2.2 for Android emulator
-  static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:8080/api/v1';
-    }
-    return 'http://43.157.212.14:3000/api/v1';
-  }
+  static String get baseUrl => 'http://43.157.212.14:3000/api/v1';
 
   static String get login => '$baseUrl/auth/login';
   static String get getMe => '$baseUrl/auth/me';
