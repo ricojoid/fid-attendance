@@ -1,5 +1,5 @@
 # Stage 1: Build Flutter Web PWA
-FROM ghcr.io/cirrusci/flutter:3.29.0 AS build
+FROM instrumentisto/flutter:latest AS build
 
 WORKDIR /app
 COPY . .
