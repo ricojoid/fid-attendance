@@ -113,7 +113,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(
-            color: isSelected ? const Color(0xFF2563EB) : Colors.transparent,
+            color: isSelected ? const Color(0xFFDC2626) : Colors.transparent,
             width: 2,
           ),
           image: DecorationImage(
@@ -126,7 +126,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     return Icon(
       Icons.person_rounded,
-      color: isSelected ? const Color(0xFF2563EB) : const Color(0xFF94A3B8),
+      color: isSelected ? const Color(0xFFDC2626) : const Color(0xFF94A3B8),
     );
   }
 
@@ -183,7 +183,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
+                        color: const Color(0xFFF9FAFB),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
@@ -192,10 +192,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFEFF6FF),
+                              color: const Color(0xFFFEE2E2),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.beach_access_rounded, color: Color(0xFF2563EB), size: 28),
+                            child: const Icon(Icons.beach_access_rounded, color: Color(0xFFDC2626), size: 28),
                           ),
                           const SizedBox(width: 14),
                           const Expanded(
@@ -233,7 +233,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
+                        color: const Color(0xFFF9FAFB),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
@@ -283,9 +283,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex == 2 ? 0 : _currentIndex,
-        children: _screens,
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        child: IndexedStack(
+          key: ValueKey<int>(_currentIndex == 2 ? 0 : _currentIndex),
+          index: _currentIndex == 2 ? 0 : _currentIndex,
+          children: _screens,
+        ),
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
@@ -309,7 +315,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           },
           type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,
-          selectedItemColor: const Color(0xFF2563EB),
+          selectedItemColor: const Color(0xFFDC2626),
           unselectedItemColor: const Color(0xFF94A3B8),
           selectedFontSize: 12,
           unselectedFontSize: 12,
@@ -327,7 +333,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               icon: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: const BoxDecoration(
-                  color: Color(0xFF2563EB),
+                  color: Color(0xFFDC2626),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),

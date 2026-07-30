@@ -208,7 +208,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         title: const Text('Employees Directory', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
@@ -246,7 +246,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
               // Employee List
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
+                    ? const Center(child: CircularProgressIndicator(color: Color(0xFFDC2626)))
                     : _filteredEmployees.isEmpty
                         ? const Center(
                             child: Text(
@@ -289,7 +289,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                                         children: [
                                           CircleAvatar(
                                             radius: 24,
-                                            backgroundColor: isSuperAdmin ? const Color(0xFF7C3AED) : const Color(0xFF2563EB),
+                                            backgroundColor: isSuperAdmin ? const Color(0xFF7C3AED) : const Color(0xFFDC2626),
                                             backgroundImage: avatarImg,
                                             child: avatarImg == null
                                                 ? Text(
@@ -351,13 +351,13 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
 
   Widget _buildRoleChip(String role) {
     String label = 'Staff';
-    Color bg = const Color(0xFFEFF6FF);
-    Color text = const Color(0xFF2563EB);
+    Color bg = const Color(0xFFFEE2E2);
+    Color text = const Color(0xFFDC2626);
 
     if (role == 'DEPARTMENT_HEAD') {
       label = 'Dept Head';
-      bg = const Color(0xFFEFF6FF);
-      text = const Color(0xFF2563EB);
+      bg = const Color(0xFFFEE2E2);
+      text = const Color(0xFFDC2626);
     } else if (role == 'MANAGER') {
       label = 'Manager';
       bg = const Color(0xFFF3E8FF);

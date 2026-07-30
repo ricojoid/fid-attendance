@@ -122,7 +122,7 @@ class _AttendanceLogScreenState extends State<AttendanceLogScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         title: const Text(
           'Attendance Log',
@@ -134,7 +134,7 @@ class _AttendanceLogScreenState extends State<AttendanceLogScreen> {
         centerTitle: false,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFDC2626)))
           : _logs.isEmpty
               ? Center(
                   child: Column(
@@ -182,7 +182,7 @@ class _AttendanceLogScreenState extends State<AttendanceLogScreen> {
                               children: [
                                 Row(
                                   children: [
-                                    const Icon(Icons.calendar_today_rounded, size: 16, color: Color(0xFF2563EB)),
+                                    const Icon(Icons.calendar_today_rounded, size: 16, color: Color(0xFFDC2626)),
                                     const SizedBox(width: 8),
                                     Text(
                                       _formatDate(dateStr),

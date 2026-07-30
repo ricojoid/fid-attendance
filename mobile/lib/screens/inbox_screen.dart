@@ -63,7 +63,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
               'message': message,
               'date': createdAt.length >= 16 ? createdAt.substring(0, 16) : createdAt,
               'icon': status == 'APPROVED' ? Icons.check_circle_rounded : (status == 'REJECTED' ? Icons.cancel_rounded : Icons.notifications_active_rounded),
-              'color': status == 'APPROVED' ? const Color(0xFF10B981) : (status == 'REJECTED' ? const Color(0xFFEF4444) : const Color(0xFF2563EB)),
+              'color': status == 'APPROVED' ? const Color(0xFF10B981) : (status == 'REJECTED' ? const Color(0xFFEF4444) : const Color(0xFFDC2626)),
             });
           }
         }
@@ -91,7 +91,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
               'message': 'Your $leaveType request for $startDate to $endDate is $status.',
               'date': startDate,
               'icon': Icons.beach_access_rounded,
-              'color': status == 'APPROVED' ? const Color(0xFF10B981) : (status == 'REJECTED' ? const Color(0xFFEF4444) : const Color(0xFF2563EB)),
+              'color': status == 'APPROVED' ? const Color(0xFF10B981) : (status == 'REJECTED' ? const Color(0xFFEF4444) : const Color(0xFFDC2626)),
             });
           }
         }
@@ -161,7 +161,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       case 'REJECTED':
         return const Color(0xFFEF4444);
       case 'INFO':
-        return const Color(0xFF2563EB);
+        return const Color(0xFFDC2626);
       case 'PENDING':
       default:
         return const Color(0xFFF59E0B);
@@ -207,7 +207,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     final notifBadgeText = _notifications.length > 99 ? '99+' : '${_notifications.length}';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         title: const Text('Inbox & Center', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 18)),
         backgroundColor: Colors.white,
@@ -215,10 +215,10 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         automaticallyImplyLeading: false,
         bottom: TabBar(
           controller: _tabController,
-          labelColor: const Color(0xFF2563EB),
+          labelColor: const Color(0xFFDC2626),
           unselectedLabelColor: const Color(0xFF64748B),
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          indicatorColor: const Color(0xFF2563EB),
+          indicatorColor: const Color(0xFFDC2626),
           indicatorWeight: 3,
           tabs: [
             Tab(
@@ -245,7 +245,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFDC2626)))
           : TabBarView(
               controller: _tabController,
               children: [
@@ -280,11 +280,11 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       child: Row(
                                         children: const [
-                                          Icon(Icons.done_all_rounded, size: 16, color: Color(0xFF2563EB)),
+                                          Icon(Icons.done_all_rounded, size: 16, color: Color(0xFFDC2626)),
                                           SizedBox(width: 4),
                                           Text(
                                             'Mark all as read',
-                                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
                                           ),
                                         ],
                                       ),
@@ -307,11 +307,19 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                   final date = (item['date'] ?? '').toString();
                                   final status = (item['status'] ?? 'INFO').toString();
                                   final icon = (item['icon'] is IconData) ? (item['icon'] as IconData) : Icons.notifications_rounded;
-                                  final iconColor = (item['color'] is Color) ? (item['color'] as Color) : const Color(0xFF2563EB);
+                                  final iconColor = (item['color'] is Color) ? (item['color'] as Color) : const Color(0xFFDC2626);
 
                                   final statusColor = _getStatusColor(status);
 
-                                  return InkWell(
+                                  return TweenAnimationBuilder<double>(
+                                    tween: Tween(begin: 0.0, end: 1.0),
+                                    duration: Duration(milliseconds: 200 + index * 60),
+                                    curve: Curves.easeOutCubic,
+                                    builder: (context, value, child) => Opacity(
+                                      opacity: value,
+                                      child: child,
+                                    ),
+                                    child: InkWell(
                                     onTap: () async {
                                       final rawId = item['raw_id'] ?? item['id']?.toString().replaceAll('db_notif_', '');
                                       if (rawId != null) {
@@ -386,7 +394,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                                     ),
                                                     const Text(
                                                       'Tap to mark read',
-                                                      style: TextStyle(fontSize: 10, color: Color(0xFF2563EB), fontWeight: FontWeight.w500),
+                                                      style: TextStyle(fontSize: 10, color: Color(0xFFDC2626), fontWeight: FontWeight.w500),
                                                     ),
                                                   ],
                                                 ),
@@ -396,6 +404,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                         ],
                                       ),
                                     ),
+                                  ),
                                   );
                                 },
                               ),
@@ -453,7 +462,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                   final category = (item['category'] ?? 'LEAVE').toString();
                                   final isPending = status == 'PENDING';
 
-                                  Color categoryColor = const Color(0xFF2563EB);
+                                  Color categoryColor = const Color(0xFFDC2626);
                                   IconData categoryIcon = Icons.assignment_rounded;
 
                                   if (category == 'OVERTIME') {
@@ -463,7 +472,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                     categoryColor = const Color(0xFFD97706);
                                     categoryIcon = Icons.edit_calendar_rounded;
                                   } else if (category == 'LEAVE') {
-                                    categoryColor = const Color(0xFF2563EB);
+                                    categoryColor = const Color(0xFFDC2626);
                                     categoryIcon = Icons.beach_access_rounded;
                                   }
 
@@ -619,7 +628,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         ),
       ),
       selected: isSelected,
-      selectedColor: const Color(0xFF2563EB),
+      selectedColor: const Color(0xFFDC2626),
       backgroundColor: const Color(0xFFF1F5F9),
       showCheckmark: false,
       onSelected: (selected) {

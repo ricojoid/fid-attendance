@@ -20,8 +20,12 @@ class MyApp extends StatelessWidget {
       title: 'FID Attendance',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blueAccent),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFDC2626),
+          primary: const Color(0xFFDC2626),
+        ),
         useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF9FAFB),
         textTheme: GoogleFonts.plusJakartaSansTextTheme(
           Theme.of(context).textTheme,
         ),

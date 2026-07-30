@@ -225,14 +225,14 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                             child: Container(
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? const Color(0xFF2563EB)
+                                    ? const Color(0xFFDC2626)
                                     : isOk
                                         ? const Color(0xFFECFDF5)
                                         : const Color(0xFFFEF2F2),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: isSelected
-                                      ? const Color(0xFF2563EB)
+                                      ? const Color(0xFFDC2626)
                                       : isOk
                                           ? const Color(0xFFA7F3D0)
                                           : const Color(0xFFFECACA),
@@ -344,7 +344,7 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         title: const Text('Attendance Correction Form', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
@@ -397,7 +397,7 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                           ),
                         ],
                       ),
-                      const Icon(Icons.calendar_month_rounded, size: 20, color: Color(0xFF2563EB)),
+                      const Icon(Icons.calendar_month_rounded, size: 20, color: Color(0xFFDC2626)),
                     ],
                   ),
                 ),
@@ -480,8 +480,10 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                 child: ElevatedButton(
                   onPressed: _isSubmitting ? null : _handleSubmit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.amber[700],
+                    backgroundColor: const Color(0xFFDC2626),
+                    disabledBackgroundColor: const Color(0xFFDC2626).withOpacity(0.5),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
                   ),
                   child: _isSubmitting
                       ? const CircularProgressIndicator(color: Colors.white)

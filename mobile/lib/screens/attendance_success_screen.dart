@@ -24,10 +24,10 @@ class AttendanceSuccessScreen extends StatelessWidget {
     final dateStr = DateFormat('EEEE, d MMMM yyyy').format(timestamp);
     final timeStr = DateFormat('HH:mm:ss').format(timestamp);
     final typeText = isCheckIn ? 'Check-In' : 'Check-Out';
-    final primaryColor = isCheckIn ? const Color(0xFF10B981) : const Color(0xFFF43F5E);
+    final primaryColor = isCheckIn ? const Color(0xFF10B981) : const Color(0xFFDC2626);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF9FAFB),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -106,7 +106,7 @@ class AttendanceSuccessScreen extends StatelessWidget {
                         icon: Icons.calendar_today_rounded,
                         label: 'Attendance Date',
                         value: dateStr,
-                        iconColor: Colors.blueAccent,
+                        iconColor: const Color(0xFFDC2626),
                       ),
                       const Divider(height: 24, color: Color(0xFFF1F5F9)),
 
@@ -168,7 +168,7 @@ class AttendanceSuccessScreen extends StatelessWidget {
                       Navigator.pop(context, true);
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
+                      backgroundColor: const Color(0xFFDC2626),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),

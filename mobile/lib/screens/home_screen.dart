@@ -27,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? _todayAttendance;
   String _userName = 'Budi Santoso';
   String? _profilePhotoPath;
+  double _contentOpacity = 0.0;
 
   double? _currentLat;
   double? _currentLong;
@@ -92,7 +93,10 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       debugPrint('Error fetching today attendance: $e');
     } finally {
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _contentOpacity = 1.0;
+      });
     }
   }
 
@@ -207,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   const Row(
                     children: [
-                      Icon(Icons.map_rounded, color: Color(0xFF2563EB)),
+                      Icon(Icons.map_rounded, color: Color(0xFFDC2626)),
                       SizedBox(width: 8),
                       Text(
                         'Location Map',
@@ -276,7 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8FAFC),
+                  color: const Color(0xFFF9FAFB),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
@@ -302,7 +306,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(ctx),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
+                    backgroundColor: const Color(0xFFDC2626),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -335,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: tag == 'IMPORTANT'
                           ? const Color(0xFFFEF2F2)
                           : tag == 'EVENT'
-                              ? const Color(0xFFEFF6FF)
+                              ? const Color(0xFFFEE2E2)
                               : const Color(0xFFECFDF5),
                       borderRadius: BorderRadius.circular(20),
                     ),
@@ -347,7 +351,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: tag == 'IMPORTANT'
                             ? const Color(0xFFEF4444)
                             : tag == 'EVENT'
-                                ? const Color(0xFF2563EB)
+                                ? const Color(0xFFDC2626)
                                 : const Color(0xFF10B981),
                       ),
                     ),
@@ -378,7 +382,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
+                    backgroundColor: const Color(0xFFDC2626),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () => Navigator.pop(ctx),
@@ -399,8 +403,8 @@ class _HomeScreenState extends State<HomeScreen> {
     required String snippet,
     required String content,
   }) {
-    Color tagBg = const Color(0xFFEFF6FF);
-    Color tagColor = const Color(0xFF2563EB);
+    Color tagBg = const Color(0xFFFEE2E2);
+    Color tagColor = const Color(0xFFDC2626);
 
     if (category == 'IMPORTANT') {
       tagBg = const Color(0xFFFEF2F2);
@@ -478,7 +482,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             final typeText = isCheckIn ? 'Check-In' : 'Check-Out';
-            final primaryColor = isCheckIn ? const Color(0xFF10B981) : const Color(0xFFF43F5E);
+            final primaryColor = isCheckIn ? const Color(0xFF10B981) : const Color(0xFFDC2626);
 
             Future<void> pickSelfie() async {
               try {
@@ -639,18 +643,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
+                          color: const Color(0xFFF9FAFB),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.location_on_rounded, color: Color(0xFF2563EB), size: 20),
+                            Icon(Icons.location_on_rounded, color: Color(0xFFDC2626), size: 20),
                             SizedBox(width: 8),
                             Text(
                               'View Location',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
                             ),
                           ],
                         ),
@@ -670,7 +674,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         hintText: 'e.g., Working from Office / WFH / Client Meeting',
                         hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
                         filled: true,
-                        fillColor: const Color(0xFFF8FAFC),
+                        fillColor: const Color(0xFFF9FAFB),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -695,7 +699,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
+                          color: const Color(0xFFF9FAFB),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
@@ -712,17 +716,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  const Text('Change', style: TextStyle(color: Color(0xFF2563EB), fontSize: 12, fontWeight: FontWeight.bold)),
+                                  const Text('Change', style: TextStyle(color: Color(0xFFDC2626), fontSize: 12, fontWeight: FontWeight.bold)),
                                 ],
                               )
                             : const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.camera_alt_rounded, color: Color(0xFF2563EB), size: 20),
+                                  Icon(Icons.camera_alt_rounded, color: Color(0xFFDC2626), size: 20),
                                   SizedBox(width: 8),
                                   Text(
                                     'Take a Selfie / Attach Photo',
-                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
                                   ),
                                 ],
                               ),
@@ -766,21 +770,25 @@ class _HomeScreenState extends State<HomeScreen> {
     final nowStr = DateFormat('EEEE, d MMMM yyyy').format(DateTime.now());
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF9FAFB),
       body: SafeArea(
         child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFFDC2626)))
             : RefreshIndicator(
                 onRefresh: () async {
                   await _fetchTodayData();
                   await _determinePosition();
                 },
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                child: AnimatedOpacity(
+                  opacity: _contentOpacity,
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeOutCubic,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                       // User Greeting & Profile Avatar Header
                       Row(
                         children: [
@@ -793,7 +801,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               final imageProvider = _getProfileImageProvider(currentPhoto);
                               return CircleAvatar(
                                 radius: 24,
-                                backgroundColor: const Color(0xFF2563EB),
+                                backgroundColor: const Color(0xFFDC2626),
                                 backgroundImage: imageProvider,
                                 child: (currentPhoto == null || currentPhoto.isEmpty)
                                     ? Text(
@@ -844,7 +852,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+                            colors: [Color(0xFFDC2626), Color(0xFFB91C1C)],
                           ),
                           borderRadius: BorderRadius.circular(20),
                         ),
@@ -957,8 +965,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: ElevatedButton(
                             onPressed: (!_hasCheckedIn || _hasCheckedOut) ? null : () => _openAttendanceBottomSheet(false),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFF43F5E),
-                              disabledBackgroundColor: const Color(0xFFF43F5E).withOpacity(0.3),
+                              backgroundColor: const Color(0xFFDC2626),
+                              disabledBackgroundColor: const Color(0xFFDC2626).withOpacity(0.3),
                               padding: const EdgeInsets.symmetric(vertical: 20),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
@@ -1071,7 +1079,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         const Row(
                           children: [
-                            Icon(Icons.campaign_rounded, color: Color(0xFF2563EB), size: 22),
+                            Icon(Icons.campaign_rounded, color: Color(0xFFDC2626), size: 22),
                             SizedBox(width: 8),
                             Text(
                               'Company Announcements',
@@ -1082,12 +1090,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEFF6FF),
+                            color: const Color(0xFFFEE2E2),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Text(
                             'Latest 3',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
                           ),
                         ),
                       ],
@@ -1123,7 +1131,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       content: 'Please be informed that our core database and server infrastructure will undergo scheduled maintenance to enhance performance and security.\n\nDowntime Window: Sunday, 2 August 2026 (01:00 AM - 04:00 AM WIB).\nDuring this period, check-in services will be temporarily unavailable.',
                     ),
                     const SizedBox(height: 16),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

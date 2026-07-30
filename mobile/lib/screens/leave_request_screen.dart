@@ -98,7 +98,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         title: const Text('Leave Application Form', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
@@ -106,7 +106,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> {
         iconTheme: const IconThemeData(color: Colors.black),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFDC2626)))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Form(
@@ -209,8 +209,10 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> {
                       child: ElevatedButton(
                         onPressed: _isSubmitting ? null : _handleSubmit,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blueAccent,
+                          backgroundColor: const Color(0xFFDC2626),
+                          disabledBackgroundColor: const Color(0xFFDC2626).withOpacity(0.5),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
                         ),
                         child: _isSubmitting
                             ? const CircularProgressIndicator(color: Colors.white)

@@ -166,7 +166,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               title: const Row(
                 children: [
-                  Icon(Icons.event_note_rounded, color: Color(0xFF2563EB)),
+                  Icon(Icons.event_note_rounded, color: Color(0xFFDC2626)),
                   SizedBox(width: 8),
                   Text('Add Event / Activity', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
@@ -214,7 +214,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(DateFormat('EEEE, dd MMM yyyy').format(eventDate)),
-                            const Icon(Icons.calendar_month, color: Color(0xFF2563EB), size: 20),
+                            const Icon(Icons.calendar_month, color: Color(0xFFDC2626), size: 20),
                           ],
                         ),
                       ),
@@ -261,7 +261,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
+                    backgroundColor: const Color(0xFFDC2626),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   onPressed: () {
@@ -305,7 +305,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final selectedDateEvents = _selectedDate != null ? _getEventsForDate(_selectedDate!) : [];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         title: const Text(
           'Calendar & Events',
@@ -316,14 +316,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
         iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFF2563EB)),
+            icon: const Icon(Icons.add_circle_outline_rounded, color: Color(0xFFDC2626)),
             onPressed: _showAddEventDialog,
             tooltip: 'Add Event',
           ),
         ],
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFDC2626)))
           : Column(
               children: [
                 // Month Header Controller
@@ -428,16 +428,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         child: Container(
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? const Color(0xFF2563EB)
+                                ? const Color(0xFFDC2626)
                                 : isToday
-                                    ? const Color(0xFFEFF6FF)
+                                    ? const Color(0xFFFEE2E2)
                                     : hasBirthday
                                         ? const Color(0xFFFFFBEB)
                                         : Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: isSelected
-                                  ? const Color(0xFF2563EB)
+                                  ? const Color(0xFFDC2626)
                                   : isToday
                                       ? const Color(0xFF93C5FD)
                                       : hasBirthday
@@ -457,7 +457,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                   color: isSelected
                                       ? Colors.white
                                       : isToday
-                                          ? const Color(0xFF2563EB)
+                                          ? const Color(0xFFDC2626)
                                           : hasBirthday
                                               ? const Color(0xFFD97706)
                                               : const Color(0xFF0F172A),
@@ -550,12 +550,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
-                                      color: isBirthday ? const Color(0xFFFEF3C7) : const Color(0xFFEFF6FF),
+                                      color: isBirthday ? const Color(0xFFFEF3C7) : const Color(0xFFFEE2E2),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Icon(
                                       isBirthday ? Icons.cake_rounded : Icons.event_rounded,
-                                      color: isBirthday ? const Color(0xFFD97706) : const Color(0xFF2563EB),
+                                      color: isBirthday ? const Color(0xFFD97706) : const Color(0xFFDC2626),
                                       size: 22,
                                     ),
                                   ),

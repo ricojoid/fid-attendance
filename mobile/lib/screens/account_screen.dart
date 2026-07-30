@@ -155,7 +155,7 @@ class _AccountScreenState extends State<AccountScreen> {
             const Text('Change Profile Photo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
             const SizedBox(height: 20),
             ListTile(
-              leading: const Icon(Icons.camera_alt_rounded, color: Color(0xFF2563EB)),
+              leading: const Icon(Icons.camera_alt_rounded, color: Color(0xFFDC2626)),
               title: const Text('Take a Photo / Selfie'),
               onTap: () async {
                 Navigator.pop(ctx);
@@ -163,7 +163,7 @@ class _AccountScreenState extends State<AccountScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library_rounded, color: Color(0xFF2563EB)),
+              leading: const Icon(Icons.photo_library_rounded, color: Color(0xFFDC2626)),
               title: const Text('Choose from Gallery'),
               onTap: () async {
                 Navigator.pop(ctx);
@@ -222,7 +222,7 @@ class _AccountScreenState extends State<AccountScreen> {
     final birthDate = (_userProfile?['birth_date'] ?? _userProfile?['birthDate'] ?? '').toString();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
         title: const Text('My Account', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
@@ -230,7 +230,7 @@ class _AccountScreenState extends State<AccountScreen> {
         automaticallyImplyLeading: false,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFFDC2626)))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -253,7 +253,7 @@ class _AccountScreenState extends State<AccountScreen> {
                             children: [
                               CircleAvatar(
                                 radius: 42,
-                                backgroundColor: const Color(0xFF2563EB),
+                                backgroundColor: const Color(0xFFDC2626),
                                 backgroundImage: _getProfileImageProvider(),
                                 child: (_profilePhotoPath == null || _profilePhotoPath!.isEmpty)
                                     ? Text(
@@ -268,7 +268,7 @@ class _AccountScreenState extends State<AccountScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.all(6),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF2563EB),
+                                    color: const Color(0xFFDC2626),
                                     shape: BoxShape.circle,
                                     border: Border.all(color: Colors.white, width: 2),
                                   ),
@@ -347,7 +347,7 @@ class _AccountScreenState extends State<AccountScreen> {
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF43F5E),
+                        backgroundColor: const Color(0xFFDC2626),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
@@ -363,13 +363,13 @@ class _AccountScreenState extends State<AccountScreen> {
 
   Widget _buildRoleBadge(String roleStr) {
     String label = roleStr;
-    Color bg = const Color(0xFFEFF6FF);
-    Color text = const Color(0xFF2563EB);
+    Color bg = const Color(0xFFFEE2E2);
+    Color text = const Color(0xFFDC2626);
 
     if (roleStr == 'DEPARTMENT_HEAD') {
       label = 'Department Head';
-      bg = const Color(0xFFEFF6FF);
-      text = const Color(0xFF2563EB);
+      bg = const Color(0xFFFEE2E2);
+      text = const Color(0xFFDC2626);
     } else if (roleStr == 'MANAGER') {
       label = 'Manager';
       bg = const Color(0xFFF3E8FF);
