@@ -1,25 +1,6 @@
 version: '3.8'
 
 services:
-  # Database Service (PostgreSQL)
-  postgres:
-    image: postgres:15-alpine
-    container_name: fid_postgres
-    restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: fid_secret_password_2026
-      POSTGRES_DB: fid_attendance
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   # Backend Go API Service
   backend:
     build:
@@ -29,19 +10,18 @@ services:
     restart: always
     environment:
       PORT: 8080
-      JWT_SECRET: super-secret-attendance-key-2026
+      JWT_SECRET: ${JWT_SECRET:-super-secret-attendance-key-2026}
       DB_DRIVER: postgres
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: fid_secret_password_2026
-      DB_NAME: fid_attendance
+      DB_HOST: ${DB_HOST:-host.docker.internal}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER:-admin}
+      DB_PASSWORD: ${DB_PASSWORD:-admin123}
+      DB_NAME: ${DB_NAME:-POSTGRES_DB}
       DB_SSLMODE: disable
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
     volumes:
       - backend_uploads:/app/uploads
 
@@ -58,5 +38,5 @@ services:
       - backend
 
 volumes:
-  postgres_data:
   backend_uploads:
+
