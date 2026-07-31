@@ -19,8 +19,8 @@ export default function Layout({ children }) {
       <aside className="w-64 bg-slate-900 text-white flex flex-col justify-between border-r border-slate-800">
         <div>
           <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-            <div className="p-2 bg-blue-600 rounded-lg">
-              <Building2 className="w-5 h-5 text-white" />
+            <div className="p-1.5 bg-white rounded-lg shadow-sm">
+              <img src="/fujitsu.png" alt="Fujitsu Logo" className="w-6 h-6 object-contain" />
             </div>
             <div>
               <h1 className="font-bold text-base tracking-wide leading-tight">FID Attendance</h1>

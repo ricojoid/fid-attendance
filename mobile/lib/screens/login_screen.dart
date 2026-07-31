@@ -70,13 +70,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFDC2626).withOpacity(0.15),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Icon(
-                      Icons.access_time_filled_rounded,
-                      size: 48,
-                      color: Color(0xFFDC2626),
+                    child: Image.asset(
+                      'assets/fujitsu.png',
+                      height: 48,
+                      fit: BoxFit.contain,
                     ),
                   ),
                   const SizedBox(height: 16),
