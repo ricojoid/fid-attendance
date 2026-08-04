@@ -22,4 +22,7 @@ class ApiConfig {
 
   static String get submitCorrection => '$baseUrl/attendance/correction';
   static String get correctionHistory => '$baseUrl/attendance/correction/history';
+
+  static String get announcements => '$baseUrl/announcements';
 }
+

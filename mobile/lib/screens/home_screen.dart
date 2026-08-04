@@ -27,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? _todayAttendance;
   String _userName = 'Budi Santoso';
   String? _profilePhotoPath;
+  List<dynamic> _announcements = [];
   double _contentOpacity = 0.0;
 
   double? _currentLat;
@@ -72,6 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isLoading = true);
     try {
       final res = await ApiService.getTodayAttendance();
+      final anns = await ApiService.getAnnouncements();
       String? savedPhoto;
       try {
         final profile = await ApiService.getMe();
@@ -89,6 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _hasCheckedOut = res['has_checked_out'] ?? false;
         _todayAttendance = res['data'];
         _profilePhotoPath = savedPhoto;
+        _announcements = anns;
       });
     } catch (e) {
       debugPrint('Error fetching today attendance: $e');
@@ -1102,34 +1105,48 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Announcement Card 1
-                    _buildAnnouncementCard(
-                      title: 'TMMIN Annual Company Gathering 2026',
-                      category: 'EVENT',
-                      date: '28 Jul 2026',
-                      snippet: 'Registration is now open for all employees! Join our annual celebration at Auditorium Hall A.',
-                      content: 'We are thrilled to announce the TMMIN Annual Company Gathering 2026! Join us for a day of teamwork, games, performances, and networking across all departments.\n\nDate: Saturday, 15 August 2026\nLocation: Main Auditorium & Outdoor Lawn\nRSVP Deadline: 5 August 2026',
-                    ),
-                    const SizedBox(height: 12),
+                    // Dynamic Announcement Cards from Backend
+                    if (_announcements.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            'No announcements published yet',
+                            style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                          ),
+                        ),
+                      )
+                    else
+                      Column(
+                        children: _announcements.take(5).map((ann) {
+                          final title = ann['title']?.toString() ?? 'Announcement';
+                          final category = ann['category']?.toString() ?? 'GENERAL';
+                          final content = ann['content']?.toString() ?? '';
+                          final createdAt = ann['created_at']?.toString() ?? '';
+                          String formattedDate = '';
+                          if (createdAt.length >= 10) {
+                            formattedDate = createdAt.substring(0, 10);
+                          }
+                          final snippet = content.length > 90 ? '${content.substring(0, 90)}...' : content;
 
-                    // Announcement Card 2
-                    _buildAnnouncementCard(
-                      title: 'Updated Work From Home & Hybrid Guidelines',
-                      category: 'POLICY',
-                      date: '24 Jul 2026',
-                      snippet: 'Please review the updated HR policy regarding flexible working arrangements and office attendance.',
-                      content: 'HR Management has published updated guidelines regarding hybrid working arrangements. All employees are required to log their attendance via FID Mobile when working remotely.\n\nKey Updates:\n1. Pre-approval required from Line Manager\n2. WFH limit set to 2 days per week\n3. Mandatory online check-in between 07:30 - 08:30 AM',
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Announcement Card 3
-                    _buildAnnouncementCard(
-                      title: 'Scheduled System Maintenance Notice',
-                      category: 'IMPORTANT',
-                      date: '20 Jul 2026',
-                      snippet: 'FID Attendance System will undergo scheduled server maintenance this Sunday at 01:00 AM WIB.',
-                      content: 'Please be informed that our core database and server infrastructure will undergo scheduled maintenance to enhance performance and security.\n\nDowntime Window: Sunday, 2 August 2026 (01:00 AM - 04:00 AM WIB).\nDuring this period, check-in services will be temporarily unavailable.',
-                    ),
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _buildAnnouncementCard(
+                              title: title,
+                              category: category,
+                              date: formattedDate,
+                              snippet: snippet,
+                              content: content,
+                            ),
+                          );
+                        }).toList(),
+                      ),
                     const SizedBox(height: 16),
                     ],
                   ),

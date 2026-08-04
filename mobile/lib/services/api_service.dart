@@ -391,4 +391,16 @@ class ApiService {
       return [];
     }
   }
+
+  static Future<List<dynamic>> getAnnouncements() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(Uri.parse(ApiConfig.announcements), headers: headers);
+      return _parseList(response.body);
+    } catch (e) {
+      debugPrint('Failed to fetch announcements: $e');
+      return [];
+    }
+  }
 }
+
