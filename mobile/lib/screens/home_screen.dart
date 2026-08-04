@@ -998,7 +998,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    // Single Row: Attendance Log & Calendar & Events
+                    // Single Row: Attendance Log & Calendar
                     Row(
                       children: [
                         Expanded(
@@ -1010,13 +1010,14 @@ class _HomeScreenState extends State<HomeScreen> {
                               );
                             },
                             child: Container(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(color: const Color(0xFFE2E8F0)),
                               ),
                               child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   CircleAvatar(
                                     backgroundColor: Color(0xFFECFDF5),
@@ -1026,10 +1027,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   Text(
                                     'Attendance Log',
                                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                  Text(
-                                    'My History Log',
-                                    style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                                   ),
                                 ],
                               ),
@@ -1046,13 +1043,14 @@ class _HomeScreenState extends State<HomeScreen> {
                               );
                             },
                             child: Container(
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(color: const Color(0xFFE2E8F0)),
                               ),
                               child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   CircleAvatar(
                                     backgroundColor: Color(0xFFF3E8FF),
@@ -1060,12 +1058,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                   SizedBox(height: 10),
                                   Text(
-                                    'Calendar & Events',
+                                    'Calendar',
                                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                  Text(
-                                    'Birthdays & Events',
-                                    style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                                   ),
                                 ],
                               ),
@@ -1105,7 +1099,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Dynamic Announcement Cards from Backend
+                    // Dynamic Announcement Cards from Backend (Strictly 3 items)
                     if (_announcements.isEmpty)
                       Container(
                         padding: const EdgeInsets.all(20),
@@ -1124,7 +1118,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                     else
                       Column(
-                        children: _announcements.take(5).map((ann) {
+                        children: _announcements.take(3).map((ann) {
                           final title = ann['title']?.toString() ?? 'Announcement';
                           final category = ann['category']?.toString() ?? 'GENERAL';
                           final content = ann['content']?.toString() ?? '';
