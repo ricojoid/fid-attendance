@@ -408,61 +408,113 @@ class _HomeScreenState extends State<HomeScreen> {
   }) {
     Color tagBg = const Color(0xFFFEE2E2);
     Color tagColor = const Color(0xFFDC2626);
+    Color accentBorder = const Color(0xFFDC2626);
 
     if (category == 'IMPORTANT') {
       tagBg = const Color(0xFFFEF2F2);
       tagColor = const Color(0xFFEF4444);
-    } else if (category == 'POLICY') {
+      accentBorder = const Color(0xFFEF4444);
+    } else if (category == 'EVENT') {
+      tagBg = const Color(0xFFEEF2FF);
+      tagColor = const Color(0xFF6366F1);
+      accentBorder = const Color(0xFF6366F1);
+    } else if (category == 'MAINTENANCE') {
+      tagBg = const Color(0xFFFEF3C7);
+      tagColor = const Color(0xFFD97706);
+      accentBorder = const Color(0xFFD97706);
+    } else if (category == 'POLICY' || category == 'GENERAL') {
       tagBg = const Color(0xFFECFDF5);
       tagColor = const Color(0xFF10B981);
+      accentBorder = const Color(0xFF10B981);
     }
 
-    return InkWell(
-      onTap: () => _showAnnouncementDialog(title, category, date, content),
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF64748B).withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: const Color(0xFFF1F5F9)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: () => _showAnnouncementDialog(title, category, date, content),
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Left Vertical Color Bar Accent
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  width: 4,
+                  height: 52,
                   decoration: BoxDecoration(
-                    color: tagBg,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    category,
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: tagColor),
+                    color: accentBorder,
+                    borderRadius: BorderRadius.circular(4),
                   ),
                 ),
-                Text(
-                  date,
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: tagBg,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              category,
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: tagColor),
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              const Icon(Icons.access_time_rounded, size: 12, color: Color(0xFF94A3B8)),
+                              const SizedBox(width: 4),
+                              Text(
+                                date,
+                                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        title,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A), height: 1.3),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        snippet,
+                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Padding(
+                  padding: EdgeInsets.only(top: 14),
+                  child: Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8), size: 20),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              snippet,
-              style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -795,91 +847,217 @@ class _HomeScreenState extends State<HomeScreen> {
                       // User Greeting & Profile Avatar Header
                       Row(
                         children: [
-                          ValueListenableBuilder<String?>(
-                            valueListenable: ApiService.profilePhotoNotifier,
-                            builder: (context, photoNotifierValue, _) {
-                              final currentPhoto = (photoNotifierValue != null && photoNotifierValue.isNotEmpty)
-                                  ? photoNotifierValue
-                                  : _profilePhotoPath;
-                              final imageProvider = _getProfileImageProvider(currentPhoto);
-                              return CircleAvatar(
-                                radius: 24,
-                                backgroundColor: const Color(0xFFDC2626),
-                                backgroundImage: imageProvider,
-                                child: (currentPhoto == null || currentPhoto.isEmpty)
-                                    ? Text(
-                                        _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18,
+                          Stack(
+                            children: [
+                              ValueListenableBuilder<String?>(
+                                valueListenable: ApiService.profilePhotoNotifier,
+                                builder: (context, photoNotifierValue, _) {
+                                  final currentPhoto = (photoNotifierValue != null && photoNotifierValue.isNotEmpty)
+                                      ? photoNotifierValue
+                                      : _profilePhotoPath;
+                                  final imageProvider = _getProfileImageProvider(currentPhoto);
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.white, width: 2),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFFDC2626).withOpacity(0.25),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
                                         ),
-                                      )
-                                    : null,
-                              );
-                            },
+                                      ],
+                                    ),
+                                    child: CircleAvatar(
+                                      radius: 26,
+                                      backgroundColor: const Color(0xFFDC2626),
+                                      backgroundImage: imageProvider,
+                                      child: (currentPhoto == null || currentPhoto.isEmpty)
+                                          ? Text(
+                                              _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 20,
+                                              ),
+                                            )
+                                          : null,
+                                    ),
+                                  );
+                                },
+                              ),
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  width: 14,
+                                  height: 14,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B981),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 2),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(width: 14),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  _getGreeting(),
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Color(0xFF64748B),
-                                    fontWeight: FontWeight.w500,
-                                  ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      _getGreeting(),
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: Color(0xFF64748B),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFECFDF5),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Row(
+                                        children: [
+                                          Icon(Icons.circle, color: Color(0xFF10B981), size: 6),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'Active',
+                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF10B981)),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
                                   _userName,
                                   style: const TextStyle(
-                                    fontSize: 18,
+                                    fontSize: 19,
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFF0F172A),
+                                    letterSpacing: -0.3,
                                   ),
                                 ),
                               ],
+                            ),
+                          ),
+                          // Location Chip
+                          InkWell(
+                            onTap: () => _showMapDialog(context),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF2F2),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFFCA5A5).withOpacity(0.5)),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.location_on_rounded, color: Color(0xFFDC2626), size: 16),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'GPS',
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 20),
 
-                      // Header Date Card
-                      // Header Date & Attendance Status Card
+                      // Header Date & Attendance Status Banner Card
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [Color(0xFFDC2626), Color(0xFFB91C1C)],
+                            colors: [Color(0xFFEF4444), Color(0xFFDC2626), Color(0xFF991B1B)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFDC2626).withOpacity(0.3),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              nowStr,
-                              style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today_rounded, color: Colors.white70, size: 14),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      nowStr,
+                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: BoxDecoration(
+                                          color: _hasCheckedIn ? const Color(0xFF34D399) : Colors.white70,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        _hasCheckedOut ? 'FINISHED' : (_hasCheckedIn ? 'CHECKED IN' : 'PENDING'),
+                                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 16),
                             Row(
                               children: [
                                 Expanded(
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(14),
+                                      color: Colors.white.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(16),
                                       border: Border.all(color: Colors.white.withOpacity(0.2)),
                                     ),
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.login_rounded, color: Color(0xFF6EE7B7), size: 20),
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF10B981).withOpacity(0.2),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.login_rounded, color: Color(0xFF6EE7B7), size: 18),
+                                        ),
                                         const SizedBox(width: 10),
                                         Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -902,15 +1080,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(14),
+                                      color: Colors.white.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(16),
                                       border: Border.all(color: Colors.white.withOpacity(0.2)),
                                     ),
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.logout_rounded, color: Color(0xFFFCA5A5), size: 20),
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFEF4444).withOpacity(0.2),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.logout_rounded, color: Color(0xFFFCA5A5), size: 18),
+                                        ),
                                         const SizedBox(width: 10),
                                         Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -941,49 +1126,103 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: ElevatedButton(
-                            onPressed: (_hasCheckedIn) ? null : () => _openAttendanceBottomSheet(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF10B981),
-                              disabledBackgroundColor: const Color(0xFF10B981).withOpacity(0.3),
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
+                          child: Container(
+                            height: 60,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(18),
+                              gradient: _hasCheckedIn
+                                  ? null
+                                  : const LinearGradient(
+                                      colors: [Color(0xFF10B981), Color(0xFF059669)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                              boxShadow: _hasCheckedIn
+                                  ? []
+                                  : [
+                                      BoxShadow(
+                                        color: const Color(0xFF10B981).withOpacity(0.35),
+                                        blurRadius: 14,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
                             ),
-                            child: Column(
-                              children: [
-                                const Icon(Icons.login, color: Colors.white, size: 28),
-                                const SizedBox(height: 6),
-                                Text(
-                                  _hasCheckedIn ? 'Checked In' : 'Check In',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
+                            child: ElevatedButton(
+                              onPressed: (_hasCheckedIn) ? null : () => _openAttendanceBottomSheet(true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                disabledBackgroundColor: const Color(0xFF10B981).withOpacity(0.2),
+                                shadowColor: Colors.transparent,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
                                 ),
-                              ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    _hasCheckedIn ? Icons.check_circle_rounded : Icons.login_rounded,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _hasCheckedIn ? 'Checked In' : 'Check In',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 14),
                         Expanded(
-                          child: ElevatedButton(
-                            onPressed: (!_hasCheckedIn || _hasCheckedOut) ? null : () => _openAttendanceBottomSheet(false),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFDC2626),
-                              disabledBackgroundColor: const Color(0xFFDC2626).withOpacity(0.3),
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
+                          child: Container(
+                            height: 60,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(18),
+                              gradient: (!_hasCheckedIn || _hasCheckedOut)
+                                  ? null
+                                  : const LinearGradient(
+                                      colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                              boxShadow: (!_hasCheckedIn || _hasCheckedOut)
+                                  ? []
+                                  : [
+                                      BoxShadow(
+                                        color: const Color(0xFFDC2626).withOpacity(0.35),
+                                        blurRadius: 14,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
                             ),
-                            child: Column(
-                              children: [
-                                const Icon(Icons.logout, color: Colors.white, size: 28),
-                                const SizedBox(height: 6),
-                                Text(
-                                  _hasCheckedOut ? 'Checked Out' : 'Check Out',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
+                            child: ElevatedButton(
+                              onPressed: (!_hasCheckedIn || _hasCheckedOut) ? null : () => _openAttendanceBottomSheet(false),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                disabledBackgroundColor: const Color(0xFFDC2626).withOpacity(0.2),
+                                shadowColor: Colors.transparent,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(18),
                                 ),
-                              ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    _hasCheckedOut ? Icons.check_circle_rounded : Icons.logout_rounded,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _hasCheckedOut ? 'Checked Out' : 'Check Out',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -991,77 +1230,127 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 28),
 
-                    // Quick Services / Applications & Requests
+                    // Quick Services / Applications & Requests Section Header
                     const Text(
-                      'Applications & Requests',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      'Applications & Services',
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A), letterSpacing: -0.2),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
 
-                    // Single Row: Attendance Log & Calendar
+                    // Single Row: Attendance Log & Calendar Cards
                     Row(
                       children: [
                         Expanded(
-                          child: InkWell(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const AttendanceLogScreen()),
-                              );
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  CircleAvatar(
-                                    backgroundColor: Color(0xFFECFDF5),
-                                    child: Icon(Icons.history_rounded, color: Color(0xFF10B981)),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFF1F5F9)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF64748B).withOpacity(0.06),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(20),
+                              child: InkWell(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const AttendanceLogScreen()),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(20),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFFECFDF5),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.history_rounded, color: Color(0xFF10B981), size: 24),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      const Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'Attendance Log',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                                          ),
+                                          SizedBox(width: 4),
+                                          Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFF94A3B8)),
+                                        ],
+                                      ),
+                                    ],
                                   ),
-                                  SizedBox(height: 10),
-                                  Text(
-                                    'Attendance Log',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 14),
                         Expanded(
-                          child: InkWell(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const CalendarScreen()),
-                              );
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
-                              ),
-                              child: const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  CircleAvatar(
-                                    backgroundColor: Color(0xFFF3E8FF),
-                                    child: Icon(Icons.calendar_month_rounded, color: Color(0xFF7C3AED)),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: const Color(0xFFF1F5F9)),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF64748B).withOpacity(0.06),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              borderRadius: BorderRadius.circular(20),
+                              child: InkWell(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const CalendarScreen()),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(20),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFFEEF2FF),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.calendar_month_rounded, color: Color(0xFF6366F1), size: 24),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      const Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'Calendar',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                                          ),
+                                          SizedBox(width: 4),
+                                          Icon(Icons.chevron_right_rounded, size: 16, color: Color(0xFF94A3B8)),
+                                        ],
+                                      ),
+                                    ],
                                   ),
-                                  SizedBox(height: 10),
-                                  Text(
-                                    'Calendar',
-                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
                           ),
