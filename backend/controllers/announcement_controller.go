@@ -16,7 +16,7 @@ func GetAnnouncements(c *gin.Context) {
 
 	// If non-admin user or requested active only
 	showAll := c.Query("all") == "true"
-	userRole, _ := c.Get("user_role")
+	userRole, _ := c.Get("userRole")
 
 	if !showAll || userRole != "SUPER_ADMIN" {
 		query = query.Where("is_active = ?", true)
@@ -32,8 +32,12 @@ func GetAnnouncements(c *gin.Context) {
 
 // CreateAnnouncement (Super Admin only)
 func CreateAnnouncement(c *gin.Context) {
-	userIDVal, _ := c.Get("user_id")
-	authorID := userIDVal.(uint)
+	var authorID uint = 1
+	if val, exists := c.Get("userID"); exists {
+		if uid, ok := val.(uint); ok {
+			authorID = uid
+		}
+	}
 
 	var req struct {
 		Title    string `json:"title" binding:"required"`
