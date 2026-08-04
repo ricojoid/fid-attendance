@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Users, User, LogOut, Building2, ShieldAlert } from 'lucide-react';
+import { Users, User, LogOut, Building2, ShieldAlert, Megaphone } from 'lucide-react';
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
@@ -11,6 +11,19 @@ export default function Layout({ children }) {
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const getHeaderTitle = () => {
+    switch (location.pathname) {
+      case '/users':
+        return 'User Management';
+      case '/announcements':
+        return 'Company Announcements';
+      case '/profile':
+        return 'My Profile';
+      default:
+        return 'Dashboard';
+    }
   };
 
   return (
@@ -42,6 +55,18 @@ export default function Layout({ children }) {
                 User Management
               </Link>
             )}
+
+            <Link
+              to="/announcements"
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                location.pathname === '/announcements'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <Megaphone className="w-4 h-4" />
+              Announcements
+            </Link>
 
             <Link
               to="/profile"
@@ -92,7 +117,7 @@ export default function Layout({ children }) {
       <main className="flex-1 flex flex-col">
         <header className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between">
           <h2 className="font-semibold text-slate-800 text-lg">
-            {location.pathname === '/users' ? 'User Management' : 'My Profile'}
+            {getHeaderTitle()}
           </h2>
           <div className="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full font-medium">
             NIP: <span className="font-bold text-slate-700">{user?.nip}</span>

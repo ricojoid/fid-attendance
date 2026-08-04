@@ -60,6 +60,7 @@ func InitDB() *gorm.DB {
 		&models.LeaveRequest{},
 		&models.AttendanceCorrection{},
 		&models.Notification{},
+		&models.Announcement{},
 		&models.LogHeader{},
 		&models.LogDetail{},
 	)
@@ -136,6 +137,31 @@ func seedInitialData(db *gorm.DB) {
 		}
 		for _, lt := range leaveTypes {
 			db.Create(&lt)
+		}
+	}
+
+	var annCount int64
+	db.Model(&models.Announcement{}).Count(&annCount)
+	if annCount == 0 {
+		log.Println("Seeding initial company announcements...")
+		announcements := []models.Announcement{
+			{
+				Title:    "Sistem Absensi Online FID Resmi Beroperasi",
+				Content:  "Selamat datang di Sistem Absensi Online Fujitsu FID. Seluruh karyawan dapat melakukan check-in, check-out, dan pengajuan cuti secara langsung melalui aplikasi web dan mobile.",
+				Category: "IMPORTANT",
+				AuthorID: 1,
+				IsActive: true,
+			},
+			{
+				Title:    "Jadwal Maintenance Server Bulanan",
+				Content:  "Pemeliharaan rutin server akan dilaksanakan pada hari Sabtu pukul 22:00 WIB. Sistem mungkin tidak dapat diakses selama 30 menit.",
+				Category: "MAINTENANCE",
+				AuthorID: 1,
+				IsActive: true,
+			},
+		}
+		for _, a := range announcements {
+			db.Create(&a)
 		}
 	}
 }

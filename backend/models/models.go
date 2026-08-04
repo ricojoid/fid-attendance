@@ -136,3 +136,20 @@ type Notification struct {
 func (Notification) TableName() string {
 	return "TB_R_NOTIFICATION"
 }
+
+type Announcement struct {
+	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	Title     string    `gorm:"size:200;not null" json:"title"`
+	Content   string    `gorm:"type:text;not null" json:"content"`
+	Category  string    `gorm:"size:50;default:'GENERAL'" json:"category"` // GENERAL, IMPORTANT, EVENT, MAINTENANCE
+	AuthorID  uint      `gorm:"not null;index" json:"author_id"`
+	Author    *User     `gorm:"foreignKey:AuthorID" json:"author,omitempty"`
+	IsActive  bool      `gorm:"default:true" json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (Announcement) TableName() string {
+	return "TB_M_ANNOUNCEMENT"
+}
+

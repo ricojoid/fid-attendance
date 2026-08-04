@@ -62,6 +62,9 @@ func main() {
 		protected.GET("/notifications", controllers.GetNotifications)
 		protected.PUT("/notifications/read/:id", controllers.MarkNotificationRead)
 		protected.PUT("/notifications/read-all", controllers.MarkAllNotificationsRead)
+
+		// Company Announcement Endpoints
+		protected.GET("/announcements", controllers.GetAnnouncements)
 	}
 
 	// Super Admin Routes
@@ -72,6 +75,11 @@ func main() {
 		admin.POST("/users", middleware.AuditLogMiddleware("CREATE_USER"), controllers.CreateUser)
 		admin.PUT("/users/:id", middleware.AuditLogMiddleware("UPDATE_USER"), controllers.UpdateUser)
 		admin.DELETE("/users/:id", middleware.AuditLogMiddleware("DELETE_USER"), controllers.DeleteUser)
+
+		// Announcement Management
+		admin.POST("/announcements", middleware.AuditLogMiddleware("CREATE_ANNOUNCEMENT"), controllers.CreateAnnouncement)
+		admin.PUT("/announcements/:id", middleware.AuditLogMiddleware("UPDATE_ANNOUNCEMENT"), controllers.UpdateAnnouncement)
+		admin.DELETE("/announcements/:id", middleware.AuditLogMiddleware("DELETE_ANNOUNCEMENT"), controllers.DeleteAnnouncement)
 	}
 
 	port := os.Getenv("PORT")

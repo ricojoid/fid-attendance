@@ -32,4 +32,25 @@ api.interceptors.response.use(
   }
 );
 
+export const getAnnouncements = async (all = false) => {
+  const res = await api.get(`/announcements${all ? '?all=true' : ''}`);
+  return res.data;
+};
+
+export const createAnnouncement = async (payload) => {
+  const res = await api.post('/admin/announcements', payload);
+  return res.data;
+};
+
+export const updateAnnouncement = async (id, payload) => {
+  const res = await api.put(`/admin/announcements/${id}`, payload);
+  return res.data;
+};
+
+export const deleteAnnouncement = async (id) => {
+  const res = await api.delete(`/admin/announcements/${id}`);
+  return res.data;
+};
+
 export default api;
+
