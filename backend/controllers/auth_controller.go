@@ -54,7 +54,7 @@ func Login(c *gin.Context) {
 		"nip":     user.NIP,
 		"email":   user.Email,
 		"role":    user.Role,
-		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		"exp":     time.Now().AddDate(100, 0, 0).Unix(), // Permanent token until logout (100 years)
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

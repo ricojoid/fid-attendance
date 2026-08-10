@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Users, User, LogOut, Building2, ShieldAlert, Megaphone } from 'lucide-react';
+import { Users, User, LogOut, ShieldAlert, Megaphone } from 'lucide-react';
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
@@ -29,26 +29,26 @@ export default function Layout({ children }) {
   return (
     <div className="min-h-screen flex bg-slate-50">
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col justify-between border-r border-slate-800">
+      <aside className="w-64 bg-slate-950 text-white flex flex-col justify-between border-r border-slate-800 shadow-xl z-20">
         <div>
-          <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-            <div className="p-1.5 bg-white rounded-lg shadow-sm">
+          <div className="p-6 border-b border-slate-800/80 flex items-center gap-3">
+            <div className="p-1.5 bg-white rounded-xl shadow-md animate-scale-in">
               <img src="/fujitsu.png" alt="Fujitsu Logo" className="w-6 h-6 object-contain" />
             </div>
             <div>
-              <h1 className="font-bold text-base tracking-wide leading-tight">FID Attendance</h1>
-              <p className="text-xs text-slate-400">Office Management</p>
+              <h1 className="font-extrabold text-base tracking-tight text-white leading-tight">FID Attendance</h1>
+              <p className="text-[11px] text-red-400 font-medium">Fujitsu Office System</p>
             </div>
           </div>
 
-          <nav className="p-4 space-y-1">
+          <nav className="p-4 space-y-1.5">
             {user?.role === 'SUPER_ADMIN' && (
               <Link
                 to="/users"
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                   location.pathname === '/users'
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                    ? 'bg-red-600 text-white shadow-lg shadow-red-600/30'
+                    : 'text-slate-400 hover:bg-slate-900 hover:text-white hover:translate-x-1'
                 }`}
               >
                 <Users className="w-4 h-4" />
@@ -58,10 +58,10 @@ export default function Layout({ children }) {
 
             <Link
               to="/announcements"
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                 location.pathname === '/announcements'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  ? 'bg-red-600 text-white shadow-lg shadow-red-600/30'
+                  : 'text-slate-400 hover:bg-slate-900 hover:text-white hover:translate-x-1'
               }`}
             >
               <Megaphone className="w-4 h-4" />
@@ -70,10 +70,10 @@ export default function Layout({ children }) {
 
             <Link
               to="/profile"
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
                 location.pathname === '/profile'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  ? 'bg-red-600 text-white shadow-lg shadow-red-600/30'
+                  : 'text-slate-400 hover:bg-slate-900 hover:text-white hover:translate-x-1'
               }`}
             >
               <User className="w-4 h-4" />
@@ -83,14 +83,14 @@ export default function Layout({ children }) {
         </div>
 
         {/* User Footer */}
-        <div className="p-4 border-t border-slate-800">
+        <div className="p-4 border-t border-slate-800/80 bg-slate-900/50">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-blue-500/20 text-blue-400 font-semibold flex items-center justify-center border border-blue-500/30 text-sm">
+              <div className="w-9 h-9 rounded-full bg-red-600/20 text-red-400 font-bold flex items-center justify-center border border-red-500/30 text-sm shadow-sm">
                 {user?.name?.charAt(0) || 'U'}
               </div>
               <div className="truncate">
-                <p className="text-sm font-medium text-white truncate">{user?.name}</p>
+                <p className="text-sm font-semibold text-white truncate">{user?.name}</p>
                 <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400">
                   {user?.role === 'SUPER_ADMIN' ? (
                     <span className="text-amber-400 font-semibold flex items-center gap-1">
@@ -104,7 +104,7 @@ export default function Layout({ children }) {
             </div>
             <button
               onClick={handleLogout}
-              className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+              className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-xl transition-all duration-200 active:scale-90"
               title="Logout"
             >
               <LogOut className="w-4 h-4" />
@@ -114,20 +114,22 @@ export default function Layout({ children }) {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col">
-        <header className="h-16 bg-white border-b border-slate-200 px-8 flex items-center justify-between">
-          <h2 className="font-semibold text-slate-800 text-lg">
+      <main className="flex-1 flex flex-col min-w-0">
+        <header className="h-16 bg-white border-b border-slate-200/80 px-8 flex items-center justify-between shadow-xs sticky top-0 z-10">
+          <h2 className="font-bold text-slate-800 text-lg tracking-tight animate-fade-in">
             {getHeaderTitle()}
           </h2>
-          <div className="text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full font-medium">
-            NIP: <span className="font-bold text-slate-700">{user?.nip}</span>
+          <div className="text-xs text-slate-600 bg-slate-100 px-3.5 py-1.5 rounded-full font-medium border border-slate-200/60 shadow-xs flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            NIP: <span className="font-bold text-slate-900">{user?.nip}</span>
           </div>
         </header>
 
-        <div className="p-8 flex-1">
+        <div className="p-8 flex-1 animate-fade-in">
           {children}
         </div>
       </main>
     </div>
   );
 }
+

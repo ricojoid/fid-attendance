@@ -20,7 +20,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   bool _isLoading = true;
   bool _hasCheckedIn = false;
   bool _hasCheckedOut = false;
@@ -34,9 +34,21 @@ class _HomeScreenState extends State<HomeScreen> {
   double? _currentLong;
   String _currentAddress = 'Fetching location...';
 
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+
+    _pulseAnimation = Tween<double>(begin: 0.97, end: 1.03).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
     ApiService.profilePhotoNotifier.addListener(_onPhotoChanged);
     _fetchTodayData();
     _determinePosition();
@@ -44,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _pulseController.dispose();
     ApiService.profilePhotoNotifier.removeListener(_onPhotoChanged);
     super.dispose();
   }
@@ -1122,109 +1135,150 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     const SizedBox(height: 24),
 
-                    // Check In / Check Out Actions
+                    // Check In / Check Out Actions with Animated Pulse Ring
                     Row(
                       children: [
                         Expanded(
-                          child: Container(
-                            height: 60,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
-                              gradient: _hasCheckedIn
-                                  ? null
-                                  : const LinearGradient(
-                                      colors: [Color(0xFF10B981), Color(0xFF059669)],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                              boxShadow: _hasCheckedIn
-                                  ? []
-                                  : [
-                                      BoxShadow(
-                                        color: const Color(0xFF10B981).withOpacity(0.35),
-                                        blurRadius: 14,
-                                        offset: const Offset(0, 6),
+                          child: !_hasCheckedIn
+                              ? ScaleTransition(
+                                  scale: _pulseAnimation,
+                                  child: Container(
+                                    height: 60,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(18),
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFF10B981), Color(0xFF059669)],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
                                       ),
-                                    ],
-                            ),
-                            child: ElevatedButton(
-                              onPressed: (_hasCheckedIn) ? null : () => _openAttendanceBottomSheet(true),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.transparent,
-                                disabledBackgroundColor: const Color(0xFF10B981).withOpacity(0.2),
-                                shadowColor: Colors.transparent,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF10B981).withValues(alpha: 0.45),
+                                          blurRadius: 18,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ElevatedButton(
+                                      onPressed: () => _openAttendanceBottomSheet(true),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.transparent,
+                                        shadowColor: Colors.transparent,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(18),
+                                        ),
+                                      ),
+                                      child: const Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.login_rounded, color: Colors.white, size: 22),
+                                          SizedBox(width: 8),
+                                          Text('Check In', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  height: 60,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  child: ElevatedButton(
+                                    onPressed: null,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.transparent,
+                                      disabledBackgroundColor: const Color(0xFF10B981).withValues(alpha: 0.2),
+                                      shadowColor: Colors.transparent,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                    ),
+                                    child: const Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.check_circle_rounded, color: Colors.white, size: 22),
+                                        SizedBox(width: 8),
+                                        Text('Checked In', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15)),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    _hasCheckedIn ? Icons.check_circle_rounded : Icons.login_rounded,
-                                    color: Colors.white,
-                                    size: 22,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    _hasCheckedIn ? 'Checked In' : 'Check In',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
-                          child: Container(
-                            height: 60,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
-                              gradient: (!_hasCheckedIn || _hasCheckedOut)
-                                  ? null
-                                  : const LinearGradient(
-                                      colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                    ),
-                              boxShadow: (!_hasCheckedIn || _hasCheckedOut)
-                                  ? []
-                                  : [
-                                      BoxShadow(
-                                        color: const Color(0xFFDC2626).withOpacity(0.35),
-                                        blurRadius: 14,
-                                        offset: const Offset(0, 6),
+                          child: (_hasCheckedIn && !_hasCheckedOut)
+                              ? ScaleTransition(
+                                  scale: _pulseAnimation,
+                                  child: Container(
+                                    height: 60,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(18),
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
                                       ),
-                                    ],
-                            ),
-                            child: ElevatedButton(
-                              onPressed: (!_hasCheckedIn || _hasCheckedOut) ? null : () => _openAttendanceBottomSheet(false),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.transparent,
-                                disabledBackgroundColor: const Color(0xFFDC2626).withOpacity(0.2),
-                                shadowColor: Colors.transparent,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(18),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFFDC2626).withValues(alpha: 0.45),
+                                          blurRadius: 18,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ElevatedButton(
+                                      onPressed: () => _openAttendanceBottomSheet(false),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.transparent,
+                                        shadowColor: Colors.transparent,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(18),
+                                        ),
+                                      ),
+                                      child: const Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.logout_rounded, color: Colors.white, size: 22),
+                                          SizedBox(width: 8),
+                                          Text('Check Out', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  height: 60,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(18),
+                                  ),
+                                  child: ElevatedButton(
+                                    onPressed: null,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.transparent,
+                                      disabledBackgroundColor: const Color(0xFFDC2626).withValues(alpha: 0.2),
+                                      shadowColor: Colors.transparent,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          _hasCheckedOut ? Icons.check_circle_rounded : Icons.logout_rounded,
+                                          color: Colors.white,
+                                          size: 22,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          _hasCheckedOut ? 'Checked Out' : 'Check Out',
+                                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    _hasCheckedOut ? Icons.check_circle_rounded : Icons.logout_rounded,
-                                    color: Colors.white,
-                                    size: 22,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    _hasCheckedOut ? 'Checked Out' : 'Check Out',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 15),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
                         ),
                       ],
                     ),
