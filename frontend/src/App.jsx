@@ -27,7 +27,16 @@ const ProtectedRoute = ({ children, requireAdmin = false }) => {
     return <Navigate to="/login" replace />;
   }
 
-  if (requireAdmin && user.role !== 'SUPER_ADMIN') {
+  const roleUpper = (user.role || '').toUpperCase();
+  const deptUpper = (user.department || '').toUpperCase();
+  const canAdmin =
+    roleUpper === 'SUPER_ADMIN' ||
+    roleUpper === 'COUNTRY_HEAD' ||
+    deptUpper === 'HUMAN RESOURCE' ||
+    deptUpper === 'HUMAN RESOURCES' ||
+    deptUpper === 'HR';
+
+  if (requireAdmin && !canAdmin) {
     return <Navigate to="/profile" replace />;
   }
 

@@ -18,12 +18,13 @@ import {
   RotateCcw,
   UserCheck,
   Hash,
+  Layers,
 } from 'lucide-react';
 
 export default function Profile() {
   const { user, updateUserProfile } = useAuth();
   const [name, setName] = useState(user?.name || '');
-  const [department, setDepartment] = useState(user?.department || '');
+  const [department, setDepartment] = useState(user?.department || 'App Dev & Data AI');
   const [birthDate, setBirthDate] = useState(user?.birth_date || '');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -36,14 +37,14 @@ export default function Profile() {
   useEffect(() => {
     if (user) {
       setName(user.name || '');
-      setDepartment(user.department || '');
+      setDepartment(user.department || 'App Dev & Data AI');
       setBirthDate(user.birth_date || '');
     }
   }, [user]);
 
   const handleReset = () => {
     setName(user?.name || '');
-    setDepartment(user?.department || '');
+    setDepartment(user?.department || 'App Dev & Data AI');
     setBirthDate(user?.birth_date || '');
     setPassword('');
     setConfirmPassword('');
@@ -70,8 +71,8 @@ export default function Profile() {
     setLoading(true);
     try {
       const payload = {
-        name: name.trim(),
-        department: department.trim(),
+        name,
+        department,
         birth_date: birthDate,
       };
       if (password) {
@@ -94,20 +95,33 @@ export default function Profile() {
     switch (role) {
       case 'SUPER_ADMIN':
         return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 shadow-xs">
+            <ShieldCheck className="w-3.5 h-3.5" /> Super Admin
+          </span>
+        );
+      case 'COUNTRY_HEAD':
+        return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 shadow-xs">
-            <Shield className="w-3.5 h-3.5" /> Super Admin
+            <UserCheck className="w-3.5 h-3.5" /> Country Head
+          </span>
+        );
+      case 'MANAGER':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/30 shadow-xs">
+            <Layers className="w-3.5 h-3.5" /> Manager
           </span>
         );
       case 'DEPARTMENT_HEAD':
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 shadow-xs">
-            <ShieldCheck className="w-3.5 h-3.5" /> Department Head
+            <Building2 className="w-3.5 h-3.5" /> Dept Head
           </span>
         );
+      case 'EMPLOYEE':
       default:
         return (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700/60 shadow-xs">
-            <User className="w-3.5 h-3.5" /> Employee
+            <Shield className="w-3.5 h-3.5" /> Employee
           </span>
         );
     }
@@ -327,14 +341,18 @@ export default function Profile() {
                     Department
                   </label>
                   <div className="relative">
-                    <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
+                    <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <select
                       value={department}
                       onChange={(e) => setDepartment(e.target.value)}
-                      placeholder="e.g. Engineering & IT"
-                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600 transition-all shadow-2xs"
-                    />
+                      className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-600 transition-all shadow-2xs"
+                    >
+                      {MASTER_DEPARTMENTS.map((dept) => (
+                        <option key={dept} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 

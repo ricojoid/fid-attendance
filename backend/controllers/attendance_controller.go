@@ -254,7 +254,34 @@ func GetCorrectionHistory(c *gin.Context) {
 func canViewAllAttendance(user models.User) bool {
 	roleUpper := strings.ToUpper(strings.TrimSpace(user.Role))
 	deptUpper := strings.ToUpper(strings.TrimSpace(user.Department))
-	return roleUpper == "SUPER_ADMIN" || strings.Contains(roleUpper, "ADMIN") || deptUpper == "HUMAN RESOURCES" || deptUpper == "HR"
+	return roleUpper == models.RoleSuperAdmin ||
+		roleUpper == models.RoleCountryHead ||
+		deptUpper == "HUMAN RESOURCE" ||
+		deptUpper == "HUMAN RESOURCES" ||
+		deptUpper == "HR"
+}
+
+func canViewTargetAttendance(requester models.User, target models.User) bool {
+	if requester.ID == target.ID {
+		return true
+	}
+	if canViewAllAttendance(requester) {
+		return true
+	}
+	roleUpper := strings.ToUpper(strings.TrimSpace(requester.Role))
+	targetRole := strings.ToUpper(strings.TrimSpace(target.Role))
+
+	if strings.EqualFold(strings.TrimSpace(requester.Department), strings.TrimSpace(target.Department)) {
+		// Manager can view Dept Heads, Employees, and self in same department
+		if roleUpper == models.RoleManager {
+			return true
+		}
+		// Dept Head can view Employees in same department
+		if roleUpper == models.RoleDepartmentHead && targetRole == models.RoleEmployee {
+			return true
+		}
+	}
+	return false
 }
 
 func GetAllUsersAttendance(c *gin.Context) {
@@ -272,12 +299,39 @@ func GetAllUsersAttendance(c *gin.Context) {
 		dateStr = time.Now().Format("2006-01-02")
 	}
 
-	// 1. Fetch users (if non-Admin and non-HR, only fetch requester themselves)
+	// 1. Fetch users scoped by organizational hierarchy
 	var users []models.User
 	query := config.DB.Order("name asc")
-	if !canViewAll {
+	scopeType := "ALL"
+	scopeName := "Company-Wide Scope"
+
+	roleUpper := strings.ToUpper(strings.TrimSpace(requester.Role))
+	deptUpper := strings.ToUpper(strings.TrimSpace(requester.Department))
+
+	if canViewAll {
+		scopeType = "ALL"
+		if roleUpper == models.RoleCountryHead {
+			scopeName = "Company Scope (Country Head)"
+		} else if deptUpper == "HUMAN RESOURCE" || deptUpper == "HUMAN RESOURCES" || deptUpper == "HR" {
+			scopeName = "Company Scope (Human Resource)"
+		} else {
+			scopeName = "Full System Scope (Super Admin)"
+		}
+	} else if roleUpper == models.RoleManager {
+		query = query.Where("LOWER(department) = LOWER(?)", strings.TrimSpace(requester.Department))
+		scopeType = "DEPARTMENT"
+		scopeName = fmt.Sprintf("Department Scope: %s (Manager)", requester.Department)
+	} else if roleUpper == models.RoleDepartmentHead {
+		query = query.Where("LOWER(department) = LOWER(?) AND (UPPER(role) = 'EMPLOYEE' OR id = ?)", strings.TrimSpace(requester.Department), requesterID)
+		scopeType = "DEPARTMENT"
+		scopeName = fmt.Sprintf("Subordinate Scope: %s (Dept Head)", requester.Department)
+	} else {
+		// EMPLOYEE
 		query = query.Where("id = ?", requesterID)
+		scopeType = "PERSONAL"
+		scopeName = "Personal Attendance Record"
 	}
+
 	if err := query.Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
 		return
@@ -305,6 +359,7 @@ func GetAllUsersAttendance(c *gin.Context) {
 		Name         string     `json:"name"`
 		NIP          string     `json:"nip"`
 		Email        string     `json:"email"`
+		Role         string     `json:"role"`
 		Department   string     `json:"department"`
 		AvatarURL    string     `json:"avatar_url"`
 		Date         string     `json:"date"`
@@ -327,6 +382,7 @@ func GetAllUsersAttendance(c *gin.Context) {
 			Name:       u.Name,
 			NIP:        u.NIP,
 			Email:      u.Email,
+			Role:       u.Role,
 			Department: u.Department,
 			AvatarURL:  u.AvatarURL,
 			Date:       dateStr,
@@ -369,6 +425,8 @@ func GetAllUsersAttendance(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"date":         dateStr,
 		"can_view_all": canViewAll,
+		"scope_type":   scopeType,
+		"scope_name":   scopeName,
 		"summary": gin.H{
 			"total":   len(users),
 			"present": presentCount,
@@ -395,15 +453,14 @@ func GetUserMonthlyAttendance(c *gin.Context) {
 		return
 	}
 
-	canViewAll := canViewAllAttendance(requester)
-	if targetUserID != requesterID && !canViewAll {
-		c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to view attendance history of other employees"})
-		return
-	}
-
 	var targetUser models.User
 	if err := config.DB.First(&targetUser, targetUserID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Target user not found"})
+		return
+	}
+
+	if !canViewTargetAttendance(requester, targetUser) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to view this employee's attendance records"})
 		return
 	}
 

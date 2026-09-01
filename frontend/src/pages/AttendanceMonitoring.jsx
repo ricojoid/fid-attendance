@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../api/client';
+import { MASTER_DEPARTMENTS } from './UserManagement';
 import {
   Calendar as CalendarIcon,
   Search,
@@ -22,7 +23,10 @@ import {
   Hourglass,
   Briefcase,
   ShieldCheck,
-  ShieldAlert
+  ShieldAlert,
+  UserCheck,
+  Layers,
+  Shield,
 } from 'lucide-react';
 
 export default function AttendanceMonitoring() {
@@ -46,6 +50,8 @@ export default function AttendanceMonitoring() {
   const [selectedDate, setSelectedDate] = useState(getTodayStr());
   const [attendanceData, setAttendanceData] = useState([]);
   const [canViewAll, setCanViewAll] = useState(true);
+  const [scopeType, setScopeType] = useState('ALL');
+  const [scopeName, setScopeName] = useState('Company-Wide Scope');
   const [summary, setSummary] = useState({
     total: 0,
     present: 0,
@@ -75,6 +81,8 @@ export default function AttendanceMonitoring() {
       const payload = res.data;
       setAttendanceData(payload.data || []);
       setCanViewAll(payload.can_view_all !== false);
+      setScopeType(payload.scope_type || (payload.can_view_all ? 'ALL' : 'PERSONAL'));
+      setScopeName(payload.scope_name || (payload.can_view_all ? 'Company-Wide Scope' : 'Personal Record'));
       setSummary(
         payload.summary || {
           total: 0,
@@ -192,13 +200,13 @@ export default function AttendanceMonitoring() {
     }
   };
 
-  // Unique Departments for filter
+  // Unique Departments for filter (combining master departments with active attendance data)
   const departments = useMemo(() => {
-    const set = new Set();
+    const set = new Set(MASTER_DEPARTMENTS);
     attendanceData.forEach((item) => {
-      if (item.department) set.add(item.department);
+      if (item.department && item.department.trim()) set.add(item.department.trim());
     });
-    return Array.from(set).sort();
+    return Array.from(set);
   }, [attendanceData]);
 
   // Filtered list
@@ -342,22 +350,29 @@ export default function AttendanceMonitoring() {
             <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">
               Attendance Monitoring
             </h1>
-            {canViewAll ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Admin & HR Access (All Users)
+            {scopeType === 'ALL' ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                {scopeName || 'Company-Wide Scope (All Users)'}
+              </span>
+            ) : scopeType === 'DEPARTMENT' ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs">
+                <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                {scopeName}
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                <ShieldAlert className="w-3.5 h-3.5" />
-                Personal Attendance View
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs">
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                {scopeName || 'Personal Attendance View'}
               </span>
             )}
           </div>
-          <p className="text-sm text-slate-500 mt-1">
-            {canViewAll
-              ? 'Real-time presence, daily check-in/out timestamps, and click employee to inspect monthly history.'
-              : 'Viewing your personal attendance logs. Manager/HR role is required to monitor other employees.'}
+          <p className="text-xs text-slate-500 mt-1">
+            {scopeType === 'ALL'
+              ? 'Executive & HR access: Monitoring attendance, check-in/out timestamps, and monthly history across all departments.'
+              : scopeType === 'DEPARTMENT'
+              ? 'Management access: Monitoring attendance records of employees in your department.'
+              : 'Viewing your personal attendance record.'}
           </p>
         </div>
 

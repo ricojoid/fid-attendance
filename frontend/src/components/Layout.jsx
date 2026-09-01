@@ -72,6 +72,15 @@ export default function Layout({ children }) {
     { path: '/profile', label: 'My Profile', icon: User, reqAdmin: false },
   ];
 
+  const roleUpper = (user?.role || '').toUpperCase();
+  const deptUpper = (user?.department || '').toUpperCase();
+  const canAdmin =
+    roleUpper === 'SUPER_ADMIN' ||
+    roleUpper === 'COUNTRY_HEAD' ||
+    deptUpper === 'HUMAN RESOURCE' ||
+    deptUpper === 'HUMAN RESOURCES' ||
+    deptUpper === 'HR';
+
   return (
     <div className="min-h-screen flex bg-slate-50 relative overflow-hidden">
       {/* Ambient background glow orbs */}
@@ -102,7 +111,7 @@ export default function Layout({ children }) {
               Menu Navigation
             </p>
             {navItems
-              .filter((item) => !item.reqAdmin || user?.role === 'SUPER_ADMIN')
+              .filter((item) => !item.reqAdmin || canAdmin)
               .map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;

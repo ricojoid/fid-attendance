@@ -31,7 +31,7 @@ func InitDB() *gorm.DB {
 		host := getEnvOrDefault("DB_HOST", "localhost")
 		port := getEnvOrDefault("DB_PORT", "5432")
 		user := getEnvOrDefault("DB_USER", "postgres")
-		password := os.Getenv("DB_PASSWORD")
+		password := getEnvOrDefault("DB_PASSWORD", "admin123")
 		dbname := getEnvOrDefault("DB_NAME", "fid_attendance")
 		sslmode := getEnvOrDefault("DB_SSLMODE", "disable")
 
@@ -74,55 +74,84 @@ func InitDB() *gorm.DB {
 }
 
 func seedInitialData(db *gorm.DB) {
-	var count int64
-	db.Model(&models.User{}).Count(&count)
-	if count <= 2 {
-		log.Println("Seeding initial users & approver mappings...")
-		adminPass, _ := bcrypt.GenerateFromPassword([]byte("Admin123!"), bcrypt.DefaultCost)
-		empPass, _ := bcrypt.GenerateFromPassword([]byte("User123!"), bcrypt.DefaultCost)
+	log.Println("Verifying / Seeding initial hierarchy users...")
+	adminPass, _ := bcrypt.GenerateFromPassword([]byte("Admin123!"), bcrypt.DefaultCost)
+	empPass, _ := bcrypt.GenerateFromPassword([]byte("User123!"), bcrypt.DefaultCost)
 
-		users := []models.User{
-			{
-				NIP:          "ADM001",
-				Name:         "Super Administrator",
-				Email:        "admin@office.com",
-				PasswordHash: string(adminPass),
-				Role:         "SUPER_ADMIN",
-				Department:   "IT & Systems",
-			},
-			{
-				NIP:          "DHD001",
-				Name:         "Dina",
-				Email:        "dina@office.com",
-				PasswordHash: string(empPass),
-				Role:         "DEPARTMENT_HEAD",
-				Department:   "Engineering & IT",
-			},
-			{
-				NIP:          "EMP701",
-				Name:         "Rico",
-				Email:        "rico@office.com",
-				PasswordHash: string(empPass),
-				Role:         "EMPLOYEE",
-				Department:   "Engineering & IT",
-				ApproverName: "Dina",
-			},
-			{
-				NIP:          "EMP001",
-				Name:         "Budi Santoso",
-				Email:        "employee@office.com",
-				PasswordHash: string(empPass),
-				Role:         "EMPLOYEE",
-				Department:   "Human Resources",
-				ApproverName: "Dina",
-			},
-		}
+	users := []models.User{
+		{
+			NIP:          "ADM001",
+			Name:         "Super Administrator",
+			Email:        "admin@office.com",
+			PasswordHash: string(adminPass),
+			Role:         models.RoleSuperAdmin,
+			Department:   "Human Resource",
+		},
+		{
+			NIP:          "CHD001",
+			Name:         "Country Head",
+			Email:        "countryhead@office.com",
+			PasswordHash: string(adminPass),
+			Role:         models.RoleCountryHead,
+			Department:   "Human Resource",
+		},
+		{
+			NIP:          "MGR001",
+			Name:         "HR Manager",
+			Email:        "hrmanager@office.com",
+			PasswordHash: string(empPass),
+			Role:         models.RoleManager,
+			Department:   "Human Resource",
+		},
+		{
+			NIP:          "MGR002",
+			Name:         "Manager AppDev",
+			Email:        "manager.appdev@office.com",
+			PasswordHash: string(empPass),
+			Role:         models.RoleManager,
+			Department:   "App Dev & Data AI",
+		},
+		{
+			NIP:          "DHD001",
+			Name:         "Dina",
+			Email:        "dina@office.com",
+			PasswordHash: string(empPass),
+			Role:         models.RoleDepartmentHead,
+			Department:   "App Dev & Data AI",
+			ApproverName: "Manager AppDev",
+		},
+		{
+			NIP:          "EMP701",
+			Name:         "Rico",
+			Email:        "rico@office.com",
+			PasswordHash: string(empPass),
+			Role:         models.RoleEmployee,
+			Department:   "App Dev & Data AI",
+			ApproverName: "Dina",
+		},
+		{
+			NIP:          "EMP001",
+			Name:         "Budi Santoso",
+			Email:        "employee@office.com",
+			PasswordHash: string(empPass),
+			Role:         models.RoleEmployee,
+			Department:   "Sales",
+			ApproverName: "Dina",
+		},
+	}
 
-		for _, u := range users {
-			var existing models.User
-			if err := db.Where("email = ?", u.Email).First(&existing).Error; err != nil {
-				db.Create(&u)
+	for _, u := range users {
+		var existing models.User
+		if err := db.Where("email = ?", u.Email).First(&existing).Error; err != nil {
+			db.Create(&u)
+		} else {
+			// Update role and department if already existing
+			existing.Role = u.Role
+			existing.Department = u.Department
+			if u.ApproverName != "" {
+				existing.ApproverName = u.ApproverName
 			}
+			db.Save(&existing)
 		}
 	}
 

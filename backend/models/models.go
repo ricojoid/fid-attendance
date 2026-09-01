@@ -4,6 +4,24 @@ import (
 	"time"
 )
 
+// Master Roles
+const (
+	RoleSuperAdmin     = "SUPER_ADMIN"
+	RoleCountryHead    = "COUNTRY_HEAD"
+	RoleManager        = "MANAGER"
+	RoleDepartmentHead = "DEPARTMENT_HEAD"
+	RoleEmployee       = "EMPLOYEE"
+)
+
+// Master Departments
+var MasterDepartments = []string{
+	"App Dev & Data AI",
+	"Service Maintenance",
+	"Procurement",
+	"Sales",
+	"Human Resource",
+}
+
 // Master Tables
 type User struct {
 	ID           uint      `gorm:"primaryKey;autoIncrement" json:"id"`

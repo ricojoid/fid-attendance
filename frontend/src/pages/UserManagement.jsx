@@ -19,10 +19,27 @@ import {
   Sparkles,
 } from 'lucide-react';
 
+export const MASTER_DEPARTMENTS = [
+  'App Dev & Data AI',
+  'Service Maintenance',
+  'Procurement',
+  'Sales',
+  'Human Resource',
+];
+
+export const MASTER_ROLES = [
+  { value: 'SUPER_ADMIN', label: 'Super Admin' },
+  { value: 'COUNTRY_HEAD', label: 'Country Head' },
+  { value: 'MANAGER', label: 'Manager' },
+  { value: 'DEPARTMENT_HEAD', label: 'Dept Head' },
+  { value: 'EMPLOYEE', label: 'Employee' },
+];
+
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -34,7 +51,7 @@ export default function UserManagement() {
     email: '',
     password: '',
     role: 'EMPLOYEE',
-    department: 'General',
+    department: 'App Dev & Data AI',
     birth_date: '',
   });
 
@@ -48,16 +65,17 @@ export default function UserManagement() {
 
   const stats = useMemo(() => {
     const total = users.length;
-    const superAdmins = users.filter((u) => u.role === 'SUPER_ADMIN').length;
-    const deptHeads = users.filter((u) => u.role === 'DEPARTMENT_HEAD').length;
+    const superAdmins = users.filter((u) => u.role === 'SUPER_ADMIN' || u.role === 'COUNTRY_HEAD').length;
+    const managersAndHeads = users.filter((u) => u.role === 'MANAGER' || u.role === 'DEPARTMENT_HEAD').length;
     const employees = users.filter((u) => u.role === 'EMPLOYEE' || !u.role).length;
-    return { total, superAdmins, deptHeads, employees };
+    return { total, superAdmins, managersAndHeads, employees };
   }, [users]);
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const res = await api.get(`/admin/users?search=${encodeURIComponent(search)}`);
+      const url = `/admin/users?search=${encodeURIComponent(search)}&department=${encodeURIComponent(departmentFilter)}`;
+      const res = await api.get(url);
       setUsers(res.data.data || []);
     } catch (err) {
       console.error('Failed to fetch users', err);
@@ -68,7 +86,7 @@ export default function UserManagement() {
 
   useEffect(() => {
     fetchUsers();
-  }, [search]);
+  }, [search, departmentFilter]);
 
   const handleOpenModal = (userToEdit = null) => {
     setError('');
@@ -81,7 +99,7 @@ export default function UserManagement() {
         email: userToEdit.email,
         password: '',
         role: userToEdit.role || 'EMPLOYEE',
-        department: userToEdit.department || '',
+        department: userToEdit.department || 'App Dev & Data AI',
         birth_date: userToEdit.birth_date || '',
       });
     } else {
@@ -92,7 +110,7 @@ export default function UserManagement() {
         email: '',
         password: '',
         role: 'EMPLOYEE',
-        department: 'Engineering',
+        department: 'App Dev & Data AI',
         birth_date: '',
       });
     }
@@ -270,7 +288,7 @@ export default function UserManagement() {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs card-interactive flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Super Admins</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Executives</p>
             <p className="text-2xl font-black text-rose-600 mt-1">{stats.superAdmins}</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 border border-rose-100">
@@ -280,8 +298,8 @@ export default function UserManagement() {
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs card-interactive flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Dept Heads</p>
-            <p className="text-2xl font-black text-indigo-600 mt-1">{stats.deptHeads}</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Managers & Heads</p>
+            <p className="text-2xl font-black text-indigo-600 mt-1">{stats.managersAndHeads}</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100">
             <Building2 className="w-5 h-5" />
@@ -301,20 +319,39 @@ export default function UserManagement() {
 
       {/* Header Actions */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, NIP, or email..."
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
-          />
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto flex-1 max-w-2xl">
+          {/* Search Box */}
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, NIP, email..."
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+            />
+          </div>
+
+          {/* Department Filter */}
+          <div className="w-full sm:w-56">
+            <select
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
+            >
+              <option value="ALL">All Departments</option>
+              {MASTER_DEPARTMENTS.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <button
           onClick={() => handleOpenModal()}
-          className="w-full sm:w-auto px-5 py-2.5 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-600/25 btn-bounce"
+          className="w-full sm:w-auto px-5 py-2.5 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-600/25 btn-bounce shrink-0"
         >
           <UserPlus className="w-4 h-4" />
           Add New User
@@ -533,12 +570,17 @@ export default function UserManagement() {
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Department</label>
-                  <input
-                    type="text"
+                  <select
                     value={formData.department}
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm"
-                  />
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                  >
+                    {MASTER_DEPARTMENTS.map((dept) => (
+                      <option key={dept} value={dept}>
+                        {dept}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

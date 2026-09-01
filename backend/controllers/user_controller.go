@@ -42,12 +42,16 @@ func GetAllUsers(c *gin.Context) {
 		query = query.Where("name LIKE ? OR nip LIKE ? OR email LIKE ?", "%"+search+"%", "%"+search+"%", "%"+search+"%")
 	}
 
+	if dept := c.Query("department"); dept != "" && dept != "ALL" {
+		query = query.Where("LOWER(department) = LOWER(?)", dept)
+	}
+
 	if err := query.Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": users})
+	c.JSON(http.StatusOK, gin.H{"data": users, "master_departments": models.MasterDepartments})
 }
 
 func CreateUser(c *gin.Context) {
