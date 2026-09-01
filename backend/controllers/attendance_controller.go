@@ -140,6 +140,46 @@ func GetAttendanceHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": history})
 }
 
+func parseCorrectionTime(attendanceDate, rawTime string) *time.Time {
+	rawTime = strings.TrimSpace(rawTime)
+	attendanceDate = strings.TrimSpace(attendanceDate)
+	if rawTime == "" {
+		return nil
+	}
+
+	// 1. Try RFC3339
+	if t, err := time.Parse(time.RFC3339, rawTime); err == nil {
+		return &t
+	}
+
+	// 2. Try parsing full datetime "2006-01-02 15:04:05" or "2006-01-02 15:04"
+	if t, err := time.ParseInLocation("2006-01-02 15:04:05", rawTime, time.Local); err == nil {
+		return &t
+	}
+	if t, err := time.ParseInLocation("2006-01-02 15:04", rawTime, time.Local); err == nil {
+		return &t
+	}
+
+	// 3. If rawTime is only time (e.g. "08:00" or "08:00:00") or contains a date part
+	timeOnly := rawTime
+	if parts := strings.Fields(rawTime); len(parts) >= 2 {
+		timeOnly = parts[len(parts)-1]
+		if len(parts[0]) == 10 && strings.Contains(parts[0], "-") {
+			attendanceDate = parts[0]
+		}
+	}
+
+	combined := fmt.Sprintf("%s %s", attendanceDate, timeOnly)
+	if t, err := time.ParseInLocation("2006-01-02 15:04:05", combined, time.Local); err == nil {
+		return &t
+	}
+	if t, err := time.ParseInLocation("2006-01-02 15:04", combined, time.Local); err == nil {
+		return &t
+	}
+
+	return nil
+}
+
 func RequestCorrection(c *gin.Context) {
 	userID := c.MustGet("userID").(uint)
 
@@ -149,26 +189,8 @@ func RequestCorrection(c *gin.Context) {
 		return
 	}
 
-	var correctedIn, correctedOut *time.Time
-	if req.CorrectedCheckIn != "" {
-		t, err := time.Parse(time.RFC3339, req.CorrectedCheckIn)
-		if err == nil {
-			correctedIn = &t
-		} else {
-			// Fallback parse simple time HH:MM
-			t2, _ := time.Parse("2006-01-02 15:04", req.AttendanceDate+" "+req.CorrectedCheckIn)
-			correctedIn = &t2
-		}
-	}
-	if req.CorrectedCheckOut != "" {
-		t, err := time.Parse(time.RFC3339, req.CorrectedCheckOut)
-		if err == nil {
-			correctedOut = &t
-		} else {
-			t2, _ := time.Parse("2006-01-02 15:04", req.AttendanceDate+" "+req.CorrectedCheckOut)
-			correctedOut = &t2
-		}
-	}
+	correctedIn := parseCorrectionTime(req.AttendanceDate, req.CorrectedCheckIn)
+	correctedOut := parseCorrectionTime(req.AttendanceDate, req.CorrectedCheckOut)
 
 	correction := models.AttendanceCorrection{
 		UserID:            userID,
@@ -227,4 +249,113 @@ func GetCorrectionHistory(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": list})
+}
+
+func GetAllUsersAttendance(c *gin.Context) {
+	dateStr := strings.TrimSpace(c.Query("date"))
+	if dateStr == "" {
+		dateStr = time.Now().Format("2006-01-02")
+	}
+
+	// 1. Fetch all users
+	var users []models.User
+	if err := config.DB.Order("name asc").Find(&users).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
+		return
+	}
+
+	// 2. Fetch all attendances for the date
+	var attendances []models.Attendance
+	config.DB.Where("date = ?", dateStr).Find(&attendances)
+	attMap := make(map[uint]models.Attendance)
+	for _, att := range attendances {
+		attMap[att.UserID] = att
+	}
+
+	// 3. Fetch approved leaves covering the date
+	var leaves []models.LeaveRequest
+	config.DB.Preload("LeaveType").Where("status = 'APPROVED' AND start_date <= ? AND end_date >= ?", dateStr, dateStr).Find(&leaves)
+	leaveMap := make(map[uint]models.LeaveRequest)
+	for _, l := range leaves {
+		leaveMap[l.UserID] = l
+	}
+
+	// 4. Combine into result list
+	type UserAttendanceItem struct {
+		UserID       uint       `json:"user_id"`
+		Name         string     `json:"name"`
+		NIP          string     `json:"nip"`
+		Email        string     `json:"email"`
+		Department   string     `json:"department"`
+		AvatarURL    string     `json:"avatar_url"`
+		Date         string     `json:"date"`
+		Status       string     `json:"status"` // PRESENT, LATE, LEAVE, ABSENT
+		CheckInTime  *time.Time `json:"check_in_time"`
+		CheckOutTime *time.Time `json:"check_out_time"`
+		Location     string     `json:"location"`
+		Notes        string     `json:"notes"`
+	}
+
+	var results []UserAttendanceItem
+	presentCount := 0
+	lateCount := 0
+	leaveCount := 0
+	absentCount := 0
+
+	for _, u := range users {
+		item := UserAttendanceItem{
+			UserID:     u.ID,
+			Name:       u.Name,
+			NIP:        u.NIP,
+			Email:      u.Email,
+			Department: u.Department,
+			AvatarURL:  u.AvatarURL,
+			Date:       dateStr,
+		}
+
+		if att, exists := attMap[u.ID]; exists {
+			item.Status = strings.ToUpper(att.Status)
+			if item.Status == "" {
+				item.Status = "PRESENT"
+			}
+			item.CheckInTime = att.CheckInTime
+			item.CheckOutTime = att.CheckOutTime
+			item.Location = att.CheckInAddress
+			item.Notes = att.CheckInAddress
+
+			if item.Status == "LATE" {
+				lateCount++
+			} else {
+				presentCount++
+			}
+		} else if leave, exists := leaveMap[u.ID]; exists {
+			item.Status = "LEAVE"
+			leaveTitle := "Leave"
+			if leave.LeaveType != nil && leave.LeaveType.Name != "" {
+				leaveTitle = leave.LeaveType.Name
+			}
+			item.Location = fmt.Sprintf("On %s", leaveTitle)
+			item.Notes = leave.Reason
+			leaveCount++
+		} else {
+			item.Status = "ABSENT"
+			item.Location = "-"
+			item.Notes = "Not checked in yet"
+			absentCount++
+		}
+
+		results = append(results, item)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"date": dateStr,
+		"summary": gin.H{
+			"total":   len(users),
+			"present": presentCount,
+			"late":    lateCount,
+			"leave":   leaveCount,
+			"absent":  absentCount,
+		},
+		"data": results,
+	})
 }

@@ -171,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             ),
                             const SizedBox(height: 16),
                             const Text(
-                              'FID Mobile Attendance',
+                              'FID-A Mobile',
                               style: TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.bold,

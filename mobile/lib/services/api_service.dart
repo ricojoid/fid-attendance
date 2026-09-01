@@ -65,22 +65,39 @@ class ApiService {
 
   // Auth
   static Future<Map<String, dynamic>> login(String email, String password) async {
-    final response = await http.post(
-      Uri.parse(ApiConfig.login),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse(ApiConfig.login),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'password': password}),
+      );
 
-    final data = jsonDecode(response.body);
-    if (response.statusCode == 200) {
-      await saveToken(data['token']);
-      final user = data['user'];
-      final userEmail = (user?['email'] ?? email).toString();
-      final photo = await getProfilePhoto(userEmail);
-      profilePhotoNotifier.value = photo;
-      return data;
-    } else {
-      throw Exception(data['error'] ?? 'Failed to login');
+      if (response.body.trim().isEmpty) {
+        throw Exception('Server mengembalikan respon kosong (${response.statusCode}). Pastikan backend Go sedang berjalan.');
+      }
+
+      dynamic data;
+      try {
+        data = jsonDecode(response.body);
+      } catch (e) {
+        throw Exception('Gagal membaca respon server (${response.statusCode}). Pastikan server backend berjalan di ${ApiConfig.baseUrl}');
+      }
+
+      if (response.statusCode == 200 && data is Map<String, dynamic>) {
+        await saveToken(data['token']);
+        final user = data['user'];
+        final userEmail = (user?['email'] ?? email).toString();
+        final photo = await getProfilePhoto(userEmail);
+        profilePhotoNotifier.value = photo;
+        return data;
+      } else {
+        final errMsg = (data is Map && data['error'] != null)
+            ? data['error'].toString()
+            : 'Gagal login (Status ${response.statusCode})';
+        throw Exception(errMsg);
+      }
+    } catch (e) {
+      rethrow;
     }
   }
 
@@ -297,22 +314,18 @@ class ApiService {
       final readIds = prefs.getStringList('read_notif_ids') ?? [];
 
       int unreadNotifs = 0;
-      if (notifications is List) {
-        for (var n in notifications) {
-          if (n is Map) {
-            final idStr = n['id']?.toString() ?? '';
-            final status = (n['status'] ?? '').toString().toUpperCase();
-            if (status != 'READ' && !readIds.contains(idStr)) {
-              unreadNotifs++;
-            }
+      for (var n in notifications) {
+        if (n is Map) {
+          final idStr = n['id']?.toString() ?? '';
+          final status = (n['status'] ?? '').toString().toUpperCase();
+          final isRead = n['is_read'] == true || status == 'READ' || readIds.contains(idStr) || readIds.contains('db_notif_$idStr');
+          if (!isRead) {
+            unreadNotifs++;
           }
         }
       }
 
-      int pendingApprovalsCount = 0;
-      if (approvals is List) {
-        pendingApprovalsCount = approvals.where((e) => e is Map && e['status'] == 'PENDING').length;
-      }
+      int pendingApprovalsCount = approvals.where((e) => e is Map && e['status'] == 'PENDING').length;
 
       int totalBadge = unreadNotifs + pendingApprovalsCount;
       inboxBadgeNotifier.value = totalBadge;
@@ -325,14 +338,20 @@ class ApiService {
   static Future<void> markSingleNotificationAsRead(String idStr) async {
     try {
       final headers = await _getHeaders();
-      await http.put(Uri.parse('${ApiConfig.baseUrl}/notifications/read/$idStr'), headers: headers);
+      final cleanId = idStr.replaceAll(RegExp(r'[^0-9]'), '');
+      if (cleanId.isNotEmpty) {
+        await http.put(Uri.parse('${ApiConfig.baseUrl}/notifications/read/$cleanId'), headers: headers);
+      }
 
       final prefs = await SharedPreferences.getInstance();
       final readIds = prefs.getStringList('read_notif_ids') ?? [];
       if (!readIds.contains(idStr)) {
         readIds.add(idStr);
-        await prefs.setStringList('read_notif_ids', readIds);
       }
+      if (cleanId.isNotEmpty && !readIds.contains(cleanId)) {
+        readIds.add(cleanId);
+      }
+      await prefs.setStringList('read_notif_ids', readIds);
       await refreshInboxCount();
     } catch (e) {
       debugPrint('Error marking notification read: $e');
@@ -346,15 +365,16 @@ class ApiService {
 
       final notifications = await getNotifications();
       final prefs = await SharedPreferences.getInstance();
-      List<String> readIds = [];
-      if (notifications is List) {
-        for (var n in notifications) {
-          if (n is Map && n['id'] != null) {
-            readIds.add(n['id'].toString());
-          }
+      final existingReadIds = prefs.getStringList('read_notif_ids') ?? [];
+      final Set<String> readSet = Set.from(existingReadIds);
+
+      for (var n in notifications) {
+        if (n is Map && n['id'] != null) {
+          readSet.add(n['id'].toString());
+          readSet.add('db_notif_${n['id']}');
         }
       }
-      await prefs.setStringList('read_notif_ids', readIds);
+      await prefs.setStringList('read_notif_ids', readSet.toList());
       await refreshInboxCount();
     } catch (e) {
       debugPrint('Error marking all notifications read: $e');

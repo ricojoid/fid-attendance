@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Users, User, LogOut, ShieldAlert, Megaphone } from 'lucide-react';
+import { Users, User, LogOut, ShieldAlert, Megaphone, CalendarCheck } from 'lucide-react';
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
@@ -15,6 +15,8 @@ export default function Layout({ children }) {
 
   const getHeaderTitle = () => {
     switch (location.pathname) {
+      case '/attendance':
+        return 'Attendance Monitoring';
       case '/users':
         return 'User Management';
       case '/announcements':
@@ -42,6 +44,18 @@ export default function Layout({ children }) {
           </div>
 
           <nav className="p-4 space-y-1.5">
+            <Link
+              to="/attendance"
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${
+                location.pathname === '/attendance'
+                  ? 'bg-red-600 text-white shadow-lg shadow-red-600/30'
+                  : 'text-slate-400 hover:bg-slate-900 hover:text-white hover:translate-x-1'
+              }`}
+            >
+              <CalendarCheck className="w-4 h-4" />
+              Attendance Monitoring
+            </Link>
+
             {user?.role === 'SUPER_ADMIN' && (
               <Link
                 to="/users"

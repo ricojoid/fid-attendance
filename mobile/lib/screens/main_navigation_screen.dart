@@ -265,7 +265,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                             ),
                           ),
                           const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF94A3B8)),
-                          const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF94A3B8)),
                         ],
                       ),
                     ),
@@ -284,7 +283,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 320),
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeInCubic,
         transitionBuilder: (Widget child, Animation<double> animation) {
@@ -332,46 +331,78 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           unselectedFontSize: 12,
           elevation: 0,
           items: [
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.home_rounded),
+            BottomNavigationBarItem(
+              icon: AnimatedScale(
+                scale: _currentIndex == 0 ? 1.15 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutBack,
+                child: const Icon(Icons.home_rounded),
+              ),
               label: 'Home',
             ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.people_rounded),
+            BottomNavigationBarItem(
+              icon: AnimatedScale(
+                scale: _currentIndex == 1 ? 1.15 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutBack,
+                child: const Icon(Icons.people_rounded),
+              ),
               label: 'Employees',
             ),
             BottomNavigationBarItem(
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFDC2626),
-                  shape: BoxShape.circle,
+              icon: AnimatedScale(
+                scale: _currentIndex == 2 ? 1.15 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutBack,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFDC2626),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color(0x40DC2626),
+                        blurRadius: 6,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
                 ),
-                child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
               ),
               label: 'Request',
             ),
             BottomNavigationBarItem(
-              icon: ValueListenableBuilder<int>(
-                valueListenable: ApiService.inboxBadgeNotifier,
-                builder: (context, count, _) {
-                  return _buildBadgeIcon(
-                    child: const Icon(Icons.inbox_rounded),
-                    count: count,
-                  );
-                },
+              icon: AnimatedScale(
+                scale: _currentIndex == 3 ? 1.15 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutBack,
+                child: ValueListenableBuilder<int>(
+                  valueListenable: ApiService.inboxBadgeNotifier,
+                  builder: (context, count, _) {
+                    return _buildBadgeIcon(
+                      child: const Icon(Icons.inbox_rounded),
+                      count: count,
+                    );
+                  },
+                ),
               ),
               label: 'Inbox',
             ),
             BottomNavigationBarItem(
-              icon: ValueListenableBuilder<String?>(
-                valueListenable: ApiService.profilePhotoNotifier,
-                builder: (context, notifierPhoto, _) {
-                  final photo = (notifierPhoto != null && notifierPhoto.isNotEmpty)
-                      ? notifierPhoto
-                      : _currentSavedPhoto;
-                  return _buildAccountAvatarIcon(photo, isSelected: _currentIndex == 4);
-                },
+              icon: AnimatedScale(
+                scale: _currentIndex == 4 ? 1.15 : 1.0,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOutBack,
+                child: ValueListenableBuilder<String?>(
+                  valueListenable: ApiService.profilePhotoNotifier,
+                  builder: (context, notifierPhoto, _) {
+                    final photo = (notifierPhoto != null && notifierPhoto.isNotEmpty)
+                        ? notifierPhoto
+                        : _currentSavedPhoto;
+                    return _buildAccountAvatarIcon(photo, isSelected: _currentIndex == 4);
+                  },
+                ),
               ),
               label: 'Account',
             ),

@@ -130,6 +130,7 @@ type Notification struct {
 	Message   string    `gorm:"type:text;not null" json:"message"`
 	Type      string    `gorm:"size:50;default:'INFO'" json:"type"`
 	Status    string    `gorm:"size:20;default:'INFO'" json:"status"`
+	IsRead    bool      `gorm:"default:false" json:"is_read"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

@@ -24,9 +24,6 @@ api.interceptors.response.use(
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
     }
     return Promise.reject(error);
   }
@@ -53,4 +50,3 @@ export const deleteAnnouncement = async (id) => {
 };
 
 export default api;
-

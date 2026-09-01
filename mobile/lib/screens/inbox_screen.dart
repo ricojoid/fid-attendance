@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 
 class InboxScreen extends StatefulWidget {
@@ -39,100 +40,82 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       // Fetch real notifications and real pending approvals directly from Backend API DB
       final dbNotifications = await ApiService.getNotifications();
       final dbPendingApprovals = await ApiService.getPendingApprovals();
-      final leaves = await ApiService.getLeaveHistory();
-      final corrections = await ApiService.getCorrectionHistory();
+      final announcements = await ApiService.getAnnouncements();
+
+      final prefs = await SharedPreferences.getInstance();
+      final readIds = prefs.getStringList('read_notif_ids') ?? [];
 
       List<Map<String, dynamic>> combinedNotifications = [];
 
       // 1. Backend Notifications from DB
-      if (dbNotifications is List) {
-        for (var n in dbNotifications) {
-          if (n is Map) {
-            final status = (n['status'] ?? 'INFO').toString();
-            final title = (n['title'] ?? 'Notification').toString();
-            final message = (n['message'] ?? '').toString();
-            final createdAt = (n['created_at'] ?? '').toString();
-            final type = (n['type'] ?? 'INFO').toString();
+      for (var n in dbNotifications) {
+        if (n is Map) {
+          final idStr = n['id']?.toString() ?? '';
+          final status = (n['status'] ?? 'INFO').toString();
+          final isRead = n['is_read'] == true ||
+              status == 'READ' ||
+              readIds.contains(idStr) ||
+              readIds.contains('db_notif_$idStr');
 
-            combinedNotifications.add({
-              'id': 'db_notif_${n['id']}',
-              'raw_id': n['id'],
-              'title': title,
-              'type': type,
-              'status': status,
-              'message': message,
-              'date': createdAt.length >= 16 ? createdAt.substring(0, 16) : createdAt,
-              'icon': status == 'APPROVED' ? Icons.check_circle_rounded : (status == 'REJECTED' ? Icons.cancel_rounded : Icons.notifications_active_rounded),
-              'color': status == 'APPROVED' ? const Color(0xFF10B981) : (status == 'REJECTED' ? const Color(0xFFEF4444) : const Color(0xFFDC2626)),
-            });
-          }
+          final title = (n['title'] ?? 'Notification').toString();
+          final message = (n['message'] ?? '').toString();
+          final createdAt = (n['created_at'] ?? '').toString();
+          final type = (n['type'] ?? 'INFO').toString();
+
+          combinedNotifications.add({
+            'id': 'db_notif_$idStr',
+            'raw_id': n['id'],
+            'title': title,
+            'type': type,
+            'status': status,
+            'is_read': isRead,
+            'message': message,
+            'date': createdAt.length >= 16 ? createdAt.substring(0, 16) : createdAt,
+            'icon': status == 'APPROVED'
+                ? Icons.check_circle_rounded
+                : (status == 'REJECTED'
+                    ? Icons.cancel_rounded
+                    : Icons.notifications_active_rounded),
+            'color': status == 'APPROVED'
+                ? const Color(0xFF10B981)
+                : (status == 'REJECTED'
+                    ? const Color(0xFFEF4444)
+                    : const Color(0xFFDC2626)),
+          });
         }
       }
 
-      // 2. Add User's submitted leaves & corrections
-      if (leaves is List) {
-        for (var l in leaves) {
-          if (l is Map) {
-            final status = (l['status'] ?? 'PENDING').toString();
-            String leaveType = 'Leave Request';
-            if (l['leave_type'] is Map) {
-              leaveType = l['leave_type']['name'] ?? 'Leave Request';
-            } else if (l['leave_type'] is String) {
-              leaveType = l['leave_type'];
-            }
-            final startDate = l['start_date'] ?? '-';
-            final endDate = l['end_date'] ?? '-';
+      // 2. Announcements
+      for (var a in announcements) {
+        if (a is Map) {
+          final aId = a['id']?.toString() ?? '';
+          final isRead = readIds.contains('ann_$aId');
+          final title = (a['title'] ?? 'Announcement').toString();
+          final content = (a['content'] ?? '').toString();
+          final cat = (a['category'] ?? 'GENERAL').toString();
+          final createdAt = (a['created_at'] ?? '').toString();
 
-            combinedNotifications.add({
-              'id': 'leave_${l['id']}',
-              'title': '$leaveType Status: $status',
-              'type': 'LEAVE',
-              'status': status,
-              'message': 'Your $leaveType request for $startDate to $endDate is $status.',
-              'date': startDate,
-              'icon': Icons.beach_access_rounded,
-              'color': status == 'APPROVED' ? const Color(0xFF10B981) : (status == 'REJECTED' ? const Color(0xFFEF4444) : const Color(0xFFDC2626)),
-            });
-          }
+          combinedNotifications.add({
+            'id': 'ann_$aId',
+            'raw_id': 'ann_$aId',
+            'title': '📢 $title',
+            'type': 'ANNOUNCEMENT',
+            'status': cat,
+            'is_read': isRead,
+            'message': content,
+            'date': createdAt.length >= 10 ? createdAt.substring(0, 10) : 'Recent',
+            'icon': Icons.campaign_rounded,
+            'color': const Color(0xFF2563EB),
+          });
         }
       }
 
-      if (corrections is List) {
-        for (var c in corrections) {
-          if (c is Map) {
-            final status = (c['status'] ?? 'PENDING').toString();
-            final attDate = c['attendance_date'] ?? '-';
-
-            combinedNotifications.add({
-              'id': 'corr_${c['id']}',
-              'title': 'Attendance Correction: $status',
-              'type': 'CORRECTION',
-              'status': status,
-              'message': 'Your correction request for date $attDate is marked as $status.',
-              'date': attDate,
-              'icon': Icons.edit_calendar_rounded,
-              'color': status == 'APPROVED' ? const Color(0xFF10B981) : (status == 'REJECTED' ? const Color(0xFFEF4444) : const Color(0xFFD97706)),
-            });
-          }
-        }
+      if (mounted) {
+        setState(() {
+          _notifications = combinedNotifications;
+          _approvalRequests = dbPendingApprovals;
+        });
       }
-
-      // System notification header
-      combinedNotifications.add({
-        'id': 'sys_1',
-        'title': 'Database Connected Live',
-        'type': 'SYSTEM',
-        'status': 'INFO',
-        'message': 'Notifications & approvals are synchronized with PostgreSQL/SQLite Backend DB.',
-        'date': 'Today',
-        'icon': Icons.verified_user_rounded,
-        'color': const Color(0xFF10B981),
-      });
-
-      setState(() {
-        _notifications = combinedNotifications;
-        _approvalRequests = dbPendingApprovals;
-      });
 
       await ApiService.refreshInboxCount();
     } catch (e) {
@@ -160,6 +143,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         return const Color(0xFF10B981);
       case 'REJECTED':
         return const Color(0xFFEF4444);
+      case 'READ':
+        return const Color(0xFF64748B);
       case 'INFO':
         return const Color(0xFFDC2626);
       case 'PENDING':
@@ -175,7 +160,6 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       final applicant = (item['applicant_name'] ?? 'Employee').toString();
 
       try {
-        // Send approval action to Backend API (updates DB & creates applicant notification)
         await ApiService.processApproval(category, reqId, newStatus);
 
         if (mounted) {
@@ -187,7 +171,6 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
           );
         }
 
-        // Refresh inbox data live from DB
         await _fetchInboxData();
       } catch (e) {
         debugPrint('Failed to process approval: $e');
@@ -202,9 +185,11 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    final unreadNotifCount = _notifications.where((e) => e is Map && e['is_read'] != true).length;
     final pendingApprovalCount = _approvalRequests.where((e) => e is Map && e['status'] == 'PENDING').length;
-    final approvalBadgeText = pendingApprovalCount > 99 ? '99+' : '$pendingApprovalCount';
-    final notifBadgeText = _notifications.length > 99 ? '99+' : '${_notifications.length}';
+
+    final notifTabTitle = unreadNotifCount > 0 ? 'Notifications ($unreadNotifCount)' : 'Notifications';
+    final approvalTabTitle = pendingApprovalCount > 0 ? 'Need My Approval ($pendingApprovalCount)' : 'Need My Approval';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
@@ -227,7 +212,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                 children: [
                   const Icon(Icons.notifications_rounded, size: 18),
                   const SizedBox(width: 6),
-                  Text('Notifications ($notifBadgeText)'),
+                  Text(notifTabTitle),
                 ],
               ),
             ),
@@ -237,7 +222,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                 children: [
                   const Icon(Icons.assignment_turned_in_rounded, size: 18),
                   const SizedBox(width: 6),
-                  Text('Need My Approval ($approvalBadgeText)'),
+                  Text(approvalTabTitle),
                 ],
               ),
             ),
@@ -261,35 +246,96 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    '${_notifications.length} Notifications',
-                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
-                                  ),
-                                  InkWell(
-                                    onTap: () async {
-                                      await ApiService.markAllNotificationsAsRead();
-                                      await _fetchInboxData();
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('All notifications marked as read!'), backgroundColor: Color(0xFF10B981)),
-                                        );
-                                      }
-                                    },
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      child: Row(
-                                        children: const [
-                                          Icon(Icons.done_all_rounded, size: 16, color: Color(0xFFDC2626)),
-                                          SizedBox(width: 4),
-                                          Text(
-                                            'Mark all as read',
-                                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
-                                          ),
-                                        ],
+                                  Row(
+                                    children: [
+                                      Text(
+                                        '${_notifications.length} Total',
+                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
                                       ),
-                                    ),
+                                      if (unreadNotifCount > 0) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFDC2626).withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            '$unreadNotifCount unread',
+                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
+                                  if (unreadNotifCount > 0)
+                                    InkWell(
+                                      onTap: () async {
+                                        setState(() {
+                                          for (var item in _notifications) {
+                                            if (item is Map) {
+                                              item['is_read'] = true;
+                                            }
+                                          }
+                                        });
+
+                                        await ApiService.markAllNotificationsAsRead();
+
+                                        final prefs = await SharedPreferences.getInstance();
+                                        final existingReadIds = prefs.getStringList('read_notif_ids') ?? [];
+                                        final readSet = Set<String>.from(existingReadIds);
+                                        for (var n in _notifications) {
+                                          if (n is Map && n['id'] != null) {
+                                            readSet.add(n['id'].toString());
+                                            if (n['raw_id'] != null) readSet.add(n['raw_id'].toString());
+                                          }
+                                        }
+                                        await prefs.setStringList('read_notif_ids', readSet.toList());
+                                        await ApiService.refreshInboxCount();
+
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Row(
+                                                children: [
+                                                  Icon(Icons.done_all_rounded, color: Colors.white, size: 18),
+                                                  SizedBox(width: 8),
+                                                  Text('All notifications marked as read!'),
+                                                ],
+                                              ),
+                                              backgroundColor: Color(0xFF10B981),
+                                              behavior: SnackBarBehavior.floating,
+                                              duration: Duration(seconds: 2),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        child: Row(
+                                          children: const [
+                                            Icon(Icons.done_all_rounded, size: 16, color: Color(0xFFDC2626)),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              'Mark all as read',
+                                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    Row(
+                                      children: const [
+                                        Icon(Icons.done_all_rounded, size: 15, color: Color(0xFF10B981)),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'All read',
+                                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF10B981)),
+                                        ),
+                                      ],
+                                    ),
                                 ],
                               ),
                             ),
@@ -306,105 +352,171 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                   final message = (item['message'] ?? '').toString();
                                   final date = (item['date'] ?? '').toString();
                                   final status = (item['status'] ?? 'INFO').toString();
+                                  final isRead = item['is_read'] == true;
                                   final icon = (item['icon'] is IconData) ? (item['icon'] as IconData) : Icons.notifications_rounded;
                                   final iconColor = (item['color'] is Color) ? (item['color'] as Color) : const Color(0xFFDC2626);
 
-                                  final statusColor = _getStatusColor(status);
+                                  final statusColor = isRead ? const Color(0xFF94A3B8) : _getStatusColor(status);
 
                                   return TweenAnimationBuilder<double>(
                                     tween: Tween(begin: 0.0, end: 1.0),
-                                    duration: Duration(milliseconds: 200 + index * 60),
+                                    duration: Duration(milliseconds: 200 + index * 40),
                                     curve: Curves.easeOutCubic,
-                                    builder: (context, value, child) => Opacity(
-                                      opacity: value,
-                                      child: child,
+                                    builder: (context, value, child) => Transform.translate(
+                                      offset: Offset(0, 14 * (1 - value)),
+                                      child: Opacity(
+                                        opacity: value,
+                                        child: child,
+                                      ),
                                     ),
                                     child: InkWell(
-                                    onTap: () async {
-                                      final rawId = item['raw_id'] ?? item['id']?.toString().replaceAll('db_notif_', '');
-                                      if (rawId != null) {
-                                        await ApiService.markSingleNotificationAsRead(rawId.toString());
-                                        await _fetchInboxData();
-                                      }
-                                    },
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(16),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                                      ),
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.all(10),
-                                            decoration: BoxDecoration(
-                                              color: iconColor.withValues(alpha: 0.12),
-                                              borderRadius: BorderRadius.circular(12),
-                                            ),
-                                            child: Icon(icon, color: iconColor, size: 22),
+                                      onTap: () async {
+                                        if (!isRead) {
+                                          setState(() {
+                                            item['is_read'] = true;
+                                          });
+
+                                          final rawId = item['raw_id']?.toString() ?? item['id']?.toString() ?? '';
+                                          await ApiService.markSingleNotificationAsRead(rawId);
+
+                                          final prefs = await SharedPreferences.getInstance();
+                                          final existingReadIds = prefs.getStringList('read_notif_ids') ?? [];
+                                          if (!existingReadIds.contains(item['id'].toString())) {
+                                            existingReadIds.add(item['id'].toString());
+                                            await prefs.setStringList('read_notif_ids', existingReadIds);
+                                          }
+                                          await ApiService.refreshInboxCount();
+                                        }
+                                      },
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: isRead ? const Color(0xFFFAFAFA) : Colors.white,
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: isRead ? const Color(0xFFE2E8F0) : const Color(0xFFDC2626).withValues(alpha: 0.35),
+                                            width: isRead ? 1.0 : 1.2,
                                           ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Row(
-                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                  children: [
-                                                    Expanded(
-                                                      child: Text(
-                                                        title,
-                                                        style: const TextStyle(
-                                                          fontSize: 14,
-                                                          fontWeight: FontWeight.bold,
-                                                          color: Color(0xFF0F172A),
+                                          boxShadow: isRead
+                                              ? null
+                                              : [
+                                                  BoxShadow(
+                                                    color: const Color(0xFFDC2626).withValues(alpha: 0.05),
+                                                    blurRadius: 8,
+                                                    offset: const Offset(0, 2),
+                                                  ),
+                                                ],
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(10),
+                                              decoration: BoxDecoration(
+                                                color: isRead
+                                                    ? const Color(0xFFE2E8F0)
+                                                    : iconColor.withValues(alpha: 0.12),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: Icon(
+                                                icon,
+                                                color: isRead ? const Color(0xFF64748B) : iconColor,
+                                                size: 22,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                    children: [
+                                                      Expanded(
+                                                        child: Row(
+                                                          children: [
+                                                            if (!isRead) ...[
+                                                              Container(
+                                                                width: 7,
+                                                                height: 7,
+                                                                margin: const EdgeInsets.only(right: 6),
+                                                                decoration: const BoxDecoration(
+                                                                  color: Color(0xFFDC2626),
+                                                                  shape: BoxShape.circle,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                            Expanded(
+                                                              child: Text(
+                                                                title,
+                                                                style: TextStyle(
+                                                                  fontSize: 14,
+                                                                  fontWeight: isRead ? FontWeight.w600 : FontWeight.bold,
+                                                                  color: isRead ? const Color(0xFF475569) : const Color(0xFF0F172A),
+                                                                ),
+                                                                maxLines: 1,
+                                                                overflow: TextOverflow.ellipsis,
+                                                              ),
+                                                            ),
+                                                          ],
                                                         ),
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow.ellipsis,
                                                       ),
-                                                    ),
-                                                    Container(
-                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                                      decoration: BoxDecoration(
-                                                        color: statusColor.withValues(alpha: 0.12),
-                                                        borderRadius: BorderRadius.circular(6),
+                                                      Container(
+                                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                        decoration: BoxDecoration(
+                                                          color: statusColor.withValues(alpha: isRead ? 0.08 : 0.12),
+                                                          borderRadius: BorderRadius.circular(6),
+                                                        ),
+                                                        child: Text(
+                                                          isRead ? 'READ' : status,
+                                                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
+                                                        ),
                                                       ),
-                                                      child: Text(
-                                                        status,
-                                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    message,
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: isRead ? const Color(0xFF64748B) : const Color(0xFF334155),
+                                                      height: 1.4,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 6),
+                                                  Row(
+                                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                    children: [
+                                                      Text(
+                                                        date,
+                                                        style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                                                       ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  message,
-                                                  style: const TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.4),
-                                                ),
-                                                const SizedBox(height: 6),
-                                                Row(
-                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                  children: [
-                                                    Text(
-                                                      date,
-                                                      style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
-                                                    ),
-                                                    const Text(
-                                                      'Tap to mark read',
-                                                      style: TextStyle(fontSize: 10, color: Color(0xFFDC2626), fontWeight: FontWeight.w500),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
+                                                      if (!isRead)
+                                                        const Text(
+                                                          'Tap to mark read',
+                                                          style: TextStyle(fontSize: 10, color: Color(0xFFDC2626), fontWeight: FontWeight.w600),
+                                                        )
+                                                      else
+                                                        Row(
+                                                          children: const [
+                                                            Icon(Icons.done_all_rounded, size: 12, color: Color(0xFF94A3B8)),
+                                                            SizedBox(width: 3),
+                                                            Text(
+                                                              'Read',
+                                                              style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
                                   );
                                 },
                               ),
@@ -506,11 +618,11 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                               backgroundColor: categoryColor,
                                               backgroundImage: avatarProvider,
                                               child: avatarProvider == null
-                                                  ? Text(
-                                                      name.isNotEmpty ? name[0].toUpperCase() : 'E',
-                                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                                                    )
-                                                  : null,
+                                              ? Text(
+                                                  name.isNotEmpty ? name[0].toUpperCase() : 'E',
+                                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                                )
+                                              : null,
                                             ),
                                             const SizedBox(width: 10),
                                             Expanded(

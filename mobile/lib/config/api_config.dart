@@ -1,7 +1,13 @@
 import 'package:flutter/foundation.dart';
 
 class ApiConfig {
+  // Flag to toggle between local Go backend (port 8080) and production VPS
+  static bool useLocalBackend = true;
+
   static String get baseUrl {
+    if (useLocalBackend) {
+      return 'http://localhost:8080/api/v1';
+    }
     if (kIsWeb) {
       return '/api/v1';
     }
@@ -25,4 +31,3 @@ class ApiConfig {
 
   static String get announcements => '$baseUrl/announcements';
 }
-

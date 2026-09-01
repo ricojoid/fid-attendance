@@ -96,6 +96,13 @@ func GetPendingApprovals(c *gin.Context) {
 		}
 
 		if approverUser.ID == userID || isSuperAdmin {
+			periodStr := fmt.Sprintf("Date: %s", cr.AttendanceDate)
+			if cr.CorrectedCheckIn != nil && cr.CorrectedCheckOut != nil {
+				periodStr = fmt.Sprintf("Date: %s (%s - %s)", cr.AttendanceDate, cr.CorrectedCheckIn.Format("15:04"), cr.CorrectedCheckOut.Format("15:04"))
+			} else if cr.CorrectedCheckIn != nil {
+				periodStr = fmt.Sprintf("Date: %s (In: %s)", cr.AttendanceDate, cr.CorrectedCheckIn.Format("15:04"))
+			}
+
 			results = append(results, gin.H{
 				"id":               cr.ID,
 				"category":         "ATTENDANCE",
@@ -104,7 +111,7 @@ func GetPendingApprovals(c *gin.Context) {
 				"applicant_avatar": cr.User.AvatarURL,
 				"department":       cr.User.Department,
 				"request_type":     "Attendance Correction",
-				"period":           fmt.Sprintf("Date: %s", cr.AttendanceDate),
+				"period":           periodStr,
 				"reason":           cr.Reason,
 				"status":           cr.Status,
 				"created_at":       cr.CreatedAt.Format("2006-01-02 15:04"),
@@ -187,6 +194,42 @@ func ProcessApproval(c *gin.Context) {
 		applicantID = corr.UserID
 		reqTitle = "Attendance Correction Status"
 		reqDetails = fmt.Sprintf("Your attendance correction request for %s has been %s by %s.", corr.AttendanceDate, newStatusUpper, approver.Name)
+
+		if newStatusUpper == "APPROVED" {
+			// Persist approved correction into TB_R_ATTENDANCE table
+			var att models.Attendance
+			err := config.DB.Where("user_id = ? AND date = ?", corr.UserID, corr.AttendanceDate).First(&att).Error
+			if err != nil {
+				status := "PRESENT"
+				if corr.CorrectedCheckIn != nil && (corr.CorrectedCheckIn.Hour() > 8 || (corr.CorrectedCheckIn.Hour() == 8 && corr.CorrectedCheckIn.Minute() > 30)) {
+					status = "LATE"
+				}
+
+				att = models.Attendance{
+					UserID:         corr.UserID,
+					Date:           corr.AttendanceDate,
+					CheckInTime:    corr.CorrectedCheckIn,
+					CheckOutTime:   corr.CorrectedCheckOut,
+					CheckInAddress: "Approved Correction: " + corr.Reason,
+					Status:         status,
+				}
+				config.DB.Create(&att)
+			} else {
+				if corr.CorrectedCheckIn != nil {
+					att.CheckInTime = corr.CorrectedCheckIn
+					if corr.CorrectedCheckIn.Hour() > 8 || (corr.CorrectedCheckIn.Hour() == 8 && corr.CorrectedCheckIn.Minute() > 30) {
+						att.Status = "LATE"
+					} else {
+						att.Status = "PRESENT"
+					}
+				}
+				if corr.CorrectedCheckOut != nil {
+					att.CheckOutTime = corr.CorrectedCheckOut
+				}
+				att.CheckInAddress = "Approved Correction: " + corr.Reason
+				config.DB.Save(&att)
+			}
+		}
 	}
 
 	// Insert Notification into DB for the Applicant User
@@ -224,7 +267,10 @@ func MarkNotificationRead(c *gin.Context) {
 	userID := c.MustGet("userID").(uint)
 	notifID := c.Param("id")
 
-	if err := config.DB.Model(&models.Notification{}).Where("id = ? AND user_id = ?", notifID, userID).Update("status", "READ").Error; err != nil {
+	if err := config.DB.Model(&models.Notification{}).Where("id = ? AND user_id = ?", notifID, userID).Updates(map[string]interface{}{
+		"status":  "READ",
+		"is_read": true,
+	}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update notification"})
 		return
 	}
@@ -236,7 +282,10 @@ func MarkNotificationRead(c *gin.Context) {
 func MarkAllNotificationsRead(c *gin.Context) {
 	userID := c.MustGet("userID").(uint)
 
-	if err := config.DB.Model(&models.Notification{}).Where("user_id = ?", userID).Update("status", "READ").Error; err != nil {
+	if err := config.DB.Model(&models.Notification{}).Where("user_id = ?", userID).Updates(map[string]interface{}{
+		"status":  "READ",
+		"is_read": true,
+	}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to mark all notifications as read"})
 		return
 	}

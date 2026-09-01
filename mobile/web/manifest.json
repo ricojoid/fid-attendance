@@ -1,6 +1,6 @@
 {
-    "name": "fid_attendance_mobile",
-    "short_name": "fid_attendance_mobile",
+    "name": "FID-A",
+    "short_name": "FID-A",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
