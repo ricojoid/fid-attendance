@@ -12,9 +12,9 @@ services:
       DB_DRIVER: ${DB_DRIVER:-postgres}
       DB_HOST: ${DB_HOST:-host.docker.internal}
       DB_PORT: ${DB_PORT:-5432}
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-fid123!!}
-      DB_NAME: ${DB_NAME:-fid_attendance}
+      DB_USER: ${DB_USER:-admin}
+      DB_PASSWORD: ${DB_PASSWORD:-admin123}
+      DB_NAME: ${DB_NAME:-POSTGRES_DB}
       DB_SSLMODE: ${DB_SSLMODE:-disable}
     extra_hosts:
       - "host.docker.internal:host-gateway"
