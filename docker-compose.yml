@@ -1,6 +1,21 @@
-version: '3.8'
-
 services:
+  # PostgreSQL Database Service
+  db:
+    image: postgres:15-alpine
+    container_name: fid_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-admin123}
+      POSTGRES_DB: ${DB_NAME:-fid_attendance}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-fid_attendance}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # Backend Go API Service
   backend:
     build:
@@ -12,18 +27,19 @@ services:
       PORT: 8080
       JWT_SECRET: ${JWT_SECRET:-super-secret-attendance-key-2026}
       DB_DRIVER: postgres
-      DB_HOST: ${DB_HOST:-host.docker.internal}
+      DB_HOST: ${DB_HOST:-db}
       DB_PORT: ${DB_PORT:-5432}
       DB_USER: ${DB_USER:-admin}
       DB_PASSWORD: ${DB_PASSWORD:-admin123}
-      DB_NAME: ${DB_NAME:-POSTGRES_DB}
+      DB_NAME: ${DB_NAME:-fid_attendance}
       DB_SSLMODE: disable
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     ports:
       - "${BACKEND_PORT:-8088}:8080"
     volumes:
       - backend_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
 
   # Frontend React Web Service (Nginx)
   frontend:
@@ -50,6 +66,7 @@ services:
       - backend
 
 volumes:
+  postgres_data:
   backend_uploads:
 
 
