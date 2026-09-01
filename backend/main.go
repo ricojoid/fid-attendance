@@ -58,6 +58,7 @@ func main() {
 		// Attendance Endpoints
 		protected.GET("/attendance/today", controllers.GetTodayStatus)
 		protected.GET("/attendance/all", controllers.GetAllUsersAttendance)
+		protected.GET("/attendance/user/:id", controllers.GetUserMonthlyAttendance)
 		protected.POST("/attendance/check-in", middleware.AuditLogMiddleware("CHECK_IN"), controllers.CheckIn)
 		protected.POST("/attendance/check-out", middleware.AuditLogMiddleware("CHECK_OUT"), controllers.CheckOut)
 		protected.GET("/attendance/history", controllers.GetAttendanceHistory)

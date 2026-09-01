@@ -251,15 +251,34 @@ func GetCorrectionHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": list})
 }
 
+func canViewAllAttendance(user models.User) bool {
+	roleUpper := strings.ToUpper(strings.TrimSpace(user.Role))
+	deptUpper := strings.ToUpper(strings.TrimSpace(user.Department))
+	return roleUpper == "SUPER_ADMIN" || strings.Contains(roleUpper, "ADMIN") || deptUpper == "HUMAN RESOURCES" || deptUpper == "HR"
+}
+
 func GetAllUsersAttendance(c *gin.Context) {
+	requesterID := c.MustGet("userID").(uint)
+	var requester models.User
+	if err := config.DB.First(&requester, requesterID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
+
+	canViewAll := canViewAllAttendance(requester)
+
 	dateStr := strings.TrimSpace(c.Query("date"))
 	if dateStr == "" {
 		dateStr = time.Now().Format("2006-01-02")
 	}
 
-	// 1. Fetch all users
+	// 1. Fetch users (if non-Admin and non-HR, only fetch requester themselves)
 	var users []models.User
-	if err := config.DB.Order("name asc").Find(&users).Error; err != nil {
+	query := config.DB.Order("name asc")
+	if !canViewAll {
+		query = query.Where("id = ?", requesterID)
+	}
+	if err := query.Find(&users).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch users"})
 		return
 	}
@@ -348,7 +367,8 @@ func GetAllUsersAttendance(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"date": dateStr,
+		"date":         dateStr,
+		"can_view_all": canViewAll,
 		"summary": gin.H{
 			"total":   len(users),
 			"present": presentCount,
@@ -357,5 +377,197 @@ func GetAllUsersAttendance(c *gin.Context) {
 			"absent":  absentCount,
 		},
 		"data": results,
+	})
+}
+
+func GetUserMonthlyAttendance(c *gin.Context) {
+	requesterID := c.MustGet("userID").(uint)
+	var requester models.User
+	if err := config.DB.First(&requester, requesterID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
+
+	targetIDStr := c.Param("id")
+	var targetUserID uint
+	if _, err := fmt.Sscanf(targetIDStr, "%d", &targetUserID); err != nil || targetUserID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	canViewAll := canViewAllAttendance(requester)
+	if targetUserID != requesterID && !canViewAll {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to view attendance history of other employees"})
+		return
+	}
+
+	var targetUser models.User
+	if err := config.DB.First(&targetUser, targetUserID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Target user not found"})
+		return
+	}
+
+	// Month param YYYY-MM
+	monthStr := strings.TrimSpace(c.Query("month"))
+	if monthStr == "" || len(monthStr) != 7 || !strings.Contains(monthStr, "-") {
+		monthStr = time.Now().Format("2006-01")
+	}
+
+	targetTime, err := time.Parse("2006-01", monthStr)
+	if err != nil {
+		monthStr = time.Now().Format("2006-01")
+		targetTime, _ = time.Parse("2006-01", monthStr)
+	}
+
+	year := targetTime.Year()
+	month := targetTime.Month()
+
+	startDate := fmt.Sprintf("%04d-%02d-01", year, int(month))
+	nextMonth := targetTime.AddDate(0, 1, 0)
+	lastDayOfMonth := nextMonth.AddDate(0, 0, -1).Day()
+	endDate := fmt.Sprintf("%04d-%02d-%02d", year, int(month), lastDayOfMonth)
+
+	// Fetch attendance records for this month
+	var attendances []models.Attendance
+	config.DB.Where("user_id = ? AND date >= ? AND date <= ?", targetUserID, startDate, endDate).Find(&attendances)
+	attMap := make(map[string]models.Attendance)
+	for _, a := range attendances {
+		attMap[a.Date] = a
+	}
+
+	// Fetch approved leaves covering any day in this month
+	var leaves []models.LeaveRequest
+	config.DB.Preload("LeaveType").Where("user_id = ? AND status = 'APPROVED' AND start_date <= ? AND end_date >= ?", targetUserID, endDate, startDate).Find(&leaves)
+
+	type DailyAttendanceRecord struct {
+		Date         string     `json:"date"`
+		DayName      string     `json:"day_name"`
+		DayNumber    int        `json:"day_number"`
+		IsWeekend    bool       `json:"is_weekend"`
+		IsFuture     bool       `json:"is_future"`
+		Status       string     `json:"status"` // PRESENT, LATE, LEAVE, ABSENT, WEEKEND, FUTURE
+		CheckInTime  *time.Time `json:"check_in_time"`
+		CheckOutTime *time.Time `json:"check_out_time"`
+		Duration     string     `json:"duration"` // e.g. "8h 45m" or "-"
+		Location     string     `json:"location"`
+		Notes        string     `json:"notes"`
+	}
+
+	todayStr := time.Now().Format("2006-01-02")
+	var days []DailyAttendanceRecord
+
+	presentCount := 0
+	lateCount := 0
+	leaveCount := 0
+	absentCount := 0
+	totalWorkMinutes := 0
+
+	for day := 1; day <= lastDayOfMonth; day++ {
+		date := fmt.Sprintf("%04d-%02d-%02d", year, int(month), day)
+		dateTime, _ := time.Parse("2006-01-02", date)
+		isWeekend := dateTime.Weekday() == time.Saturday || dateTime.Weekday() == time.Sunday
+		isFuture := date > todayStr
+
+		record := DailyAttendanceRecord{
+			Date:      date,
+			DayName:   dateTime.Weekday().String(),
+			DayNumber: day,
+			IsWeekend: isWeekend,
+			IsFuture:  isFuture,
+		}
+
+		if att, exists := attMap[date]; exists {
+			record.Status = strings.ToUpper(att.Status)
+			if record.Status == "" {
+				record.Status = "PRESENT"
+			}
+			record.CheckInTime = att.CheckInTime
+			record.CheckOutTime = att.CheckOutTime
+			record.Location = att.CheckInAddress
+			record.Notes = att.CheckInAddress
+
+			// Calculate work duration if both in and out exist
+			if att.CheckInTime != nil && att.CheckOutTime != nil {
+				dur := att.CheckOutTime.Sub(*att.CheckInTime)
+				if dur > 0 {
+					totalMins := int(dur.Minutes())
+					totalWorkMinutes += totalMins
+					record.Duration = fmt.Sprintf("%dh %02dm", totalMins/60, totalMins%60)
+				} else {
+					record.Duration = "-"
+				}
+			} else {
+				record.Duration = "-"
+			}
+
+			if record.Status == "LATE" {
+				lateCount++
+			} else {
+				presentCount++
+			}
+		} else {
+			var leaveFound *models.LeaveRequest
+			for _, l := range leaves {
+				if l.StartDate <= date && l.EndDate >= date {
+					leaveFound = &l
+					break
+				}
+			}
+
+			if leaveFound != nil {
+				record.Status = "LEAVE"
+				typeName := "Leave"
+				if leaveFound.LeaveType != nil && leaveFound.LeaveType.Name != "" {
+					typeName = leaveFound.LeaveType.Name
+				}
+				record.Location = fmt.Sprintf("On %s", typeName)
+				record.Notes = leaveFound.Reason
+				record.Duration = "-"
+				if !isWeekend {
+					leaveCount++
+				}
+			} else if isWeekend {
+				record.Status = "WEEKEND"
+				record.Location = "Weekend Off"
+				record.Duration = "-"
+			} else if isFuture {
+				record.Status = "FUTURE"
+				record.Location = "-"
+				record.Duration = "-"
+			} else {
+				record.Status = "ABSENT"
+				record.Location = "-"
+				record.Notes = "Did not check in"
+				record.Duration = "-"
+				absentCount++
+			}
+		}
+
+		days = append(days, record)
+	}
+
+	workHoursStr := fmt.Sprintf("%dh %02dm", totalWorkMinutes/60, totalWorkMinutes%60)
+
+	c.JSON(http.StatusOK, gin.H{
+		"user": gin.H{
+			"id":         targetUser.ID,
+			"name":       targetUser.Name,
+			"nip":        targetUser.NIP,
+			"email":      targetUser.Email,
+			"department": targetUser.Department,
+			"role":       targetUser.Role,
+			"avatar_url": targetUser.AvatarURL,
+		},
+		"month": monthStr,
+		"summary": gin.H{
+			"present":            presentCount,
+			"late":               lateCount,
+			"leave":              leaveCount,
+			"absent":             absentCount,
+			"total_present":      presentCount + lateCount,
+			"total_work_minutes": totalWorkMinutes,
+			"work_hours_str":     workHoursStr,
+		},
+		"days": days,
 	})
 }
