@@ -433,7 +433,7 @@ export default function AttendanceMonitoring() {
       {/* Summary Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {/* Total Users */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs card-interactive flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
             <Users className="w-6 h-6" />
           </div>
@@ -446,7 +446,7 @@ export default function AttendanceMonitoring() {
         </div>
 
         {/* Present / On-Time */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs card-interactive flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
             <CheckCircle2 className="w-6 h-6" />
           </div>
@@ -457,7 +457,7 @@ export default function AttendanceMonitoring() {
         </div>
 
         {/* Late */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs card-interactive flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
             <Clock className="w-6 h-6" />
           </div>
@@ -468,7 +468,7 @@ export default function AttendanceMonitoring() {
         </div>
 
         {/* On Leave */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs card-interactive flex items-center gap-4">
           <div className="w-12 h-12 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center font-bold">
             <CalendarX2 className="w-6 h-6" />
           </div>
@@ -478,13 +478,13 @@ export default function AttendanceMonitoring() {
           </div>
         </div>
 
-        {/* Absent / Not Checked In */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4 col-span-2 sm:col-span-1">
+        {/* Absent */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs card-interactive flex items-center gap-4 col-span-2 sm:col-span-1">
           <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
             <UserX className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-rose-600">Not Checked In</p>
+            <p className="text-xs font-semibold text-rose-600">Absent</p>
             <p className="text-2xl font-black text-rose-700 mt-0.5">{summary.absent}</p>
           </div>
         </div>

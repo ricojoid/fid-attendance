@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../api/client';
 import {
   UserPlus,
@@ -12,7 +12,11 @@ import {
   AlertCircle,
   UserCheck,
   Building2,
-  Layers
+  Layers,
+  Users,
+  UserCog,
+  Briefcase,
+  Sparkles,
 } from 'lucide-react';
 
 export default function UserManagement() {
@@ -41,6 +45,14 @@ export default function UserManagement() {
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const stats = useMemo(() => {
+    const total = users.length;
+    const superAdmins = users.filter((u) => u.role === 'SUPER_ADMIN').length;
+    const deptHeads = users.filter((u) => u.role === 'DEPARTMENT_HEAD').length;
+    const employees = users.filter((u) => u.role === 'EMPLOYEE' || !u.role).length;
+    return { total, superAdmins, deptHeads, employees };
+  }, [users]);
 
   const fetchUsers = async () => {
     try {
@@ -228,7 +240,7 @@ export default function UserManagement() {
         );
       case 'DEPARTMENT_HEAD':
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-full text-xs font-semibold">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full text-xs font-semibold">
             <Building2 className="w-3.5 h-3.5" /> Dept Head
           </span>
         );
@@ -243,23 +255,66 @@ export default function UserManagement() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
+      {/* Metric Summary Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs card-interactive flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Users</p>
+            <p className="text-2xl font-black text-slate-900 mt-1">{stats.total}</p>
+          </div>
+          <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
+            <Users className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs card-interactive flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Super Admins</p>
+            <p className="text-2xl font-black text-rose-600 mt-1">{stats.superAdmins}</p>
+          </div>
+          <div className="w-11 h-11 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 border border-rose-100">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs card-interactive flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Dept Heads</p>
+            <p className="text-2xl font-black text-indigo-600 mt-1">{stats.deptHeads}</p>
+          </div>
+          <div className="w-11 h-11 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100">
+            <Building2 className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs card-interactive flex items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Employees</p>
+            <p className="text-2xl font-black text-slate-800 mt-1">{stats.employees}</p>
+          </div>
+          <div className="w-11 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700">
+            <Briefcase className="w-5 h-5" />
+          </div>
+        </div>
+      </div>
+
       {/* Header Actions */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, NIP, or email..."
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
           />
         </div>
 
         <button
           onClick={() => handleOpenModal()}
-          className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg flex items-center justify-center gap-2 transition-all shadow-sm"
+          className="w-full sm:w-auto px-5 py-2.5 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-600/25 btn-bounce"
         >
           <UserPlus className="w-4 h-4" />
           Add New User
@@ -332,7 +387,7 @@ export default function UserManagement() {
                     <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-semibold flex items-center justify-center text-sm border border-blue-200">
+                          <div className="w-9 h-9 rounded-full bg-red-50 text-red-700 font-semibold flex items-center justify-center text-sm border border-red-200">
                             {u.name ? u.name.charAt(0).toUpperCase() : 'U'}
                           </div>
                           <div>
@@ -350,11 +405,11 @@ export default function UserManagement() {
                           onClick={() => handleOpenMappingModal(u)}
                           className={`inline-flex items-center gap-1.5 px-3 py-1 border rounded-lg text-xs font-medium transition-colors ${
                             hasApprover
-                              ? 'bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-600 border-slate-200 hover:border-blue-200'
+                              ? 'bg-slate-100 hover:bg-red-50 text-slate-700 hover:text-red-600 border-slate-200 hover:border-red-200'
                               : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
                           }`}
                         >
-                          <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                          <UserCheck className="w-3.5 h-3.5 text-red-600" />
                           <span>{hasApprover ? approverName : 'Not Set'}</span>
                         </button>
                       </td>
@@ -362,14 +417,14 @@ export default function UserManagement() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleOpenMappingModal(u)}
-                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-md transition-colors"
+                            className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 rounded-md transition-colors"
                             title="Set Approver"
                           >
                             <UserCheck className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleOpenModal(u)}
-                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-slate-100 rounded-md transition-colors"
+                            className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 rounded-md transition-colors"
                             title="Edit User"
                           >
                             <Edit2 className="w-4 h-4" />
@@ -507,7 +562,7 @@ export default function UserManagement() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg"
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-medium text-sm rounded-lg transition-all shadow-md shadow-red-600/20"
                 >
                   {editingUser ? 'Update User' : 'Save User'}
                 </button>
@@ -545,7 +600,7 @@ export default function UserManagement() {
                       approverName: selectedUser ? selectedUser.name : '',
                     });
                   }}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
                 >
                   <option value="">-- Select Approver --</option>
                   {users
@@ -568,9 +623,9 @@ export default function UserManagement() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg"
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-medium text-sm rounded-lg transition-all shadow-md shadow-red-600/20"
                 >
-                  Save Approver to DB
+                  Save Approver
                 </button>
               </div>
             </form>

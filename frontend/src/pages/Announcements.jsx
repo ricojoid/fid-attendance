@@ -168,13 +168,13 @@ export default function Announcements() {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 rounded-2xl p-6 sm:p-8 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+      <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-red-950 rounded-2xl p-6 sm:p-8 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-6 border border-slate-800">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2.5 bg-blue-600/30 border border-blue-500/30 rounded-xl text-blue-400">
+            <div className="p-2.5 bg-red-600/20 border border-red-500/30 rounded-xl text-red-400">
               <Megaphone className="w-6 h-6" />
             </div>
-            <span className="text-xs font-semibold tracking-wider uppercase text-blue-400">
+            <span className="text-xs font-semibold tracking-wider uppercase text-red-400">
               Internal Communications
             </span>
           </div>
@@ -187,7 +187,7 @@ export default function Announcements() {
         {isAdmin && (
           <button
             onClick={handleOpenCreateModal}
-            className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl text-sm transition-all shadow-lg shadow-blue-600/30 hover:scale-[1.02] active:scale-[0.98] shrink-0"
+            className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-medium rounded-xl text-sm transition-all shadow-lg shadow-red-600/25 hover:scale-[1.02] active:scale-[0.98] shrink-0"
           >
             <Plus className="w-4 h-4" />
             New Announcement
@@ -229,7 +229,7 @@ export default function Announcements() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search announcement..."
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:bg-white transition-all"
           />
         </div>
       </div>
@@ -254,8 +254,8 @@ export default function Announcements() {
           {filteredAnnouncements.map((item) => (
             <div
               key={item.id}
-              className={`bg-white rounded-2xl border transition-all shadow-sm hover:shadow-md flex flex-col justify-between overflow-hidden ${
-                !item.is_active ? 'opacity-60 bg-slate-50/70 border-slate-200' : 'border-slate-200'
+              className={`bg-white rounded-2xl border transition-all duration-300 card-interactive flex flex-col justify-between overflow-hidden ${
+                !item.is_active ? 'opacity-60 bg-slate-50/70 border-slate-200' : 'border-slate-200/80 shadow-xs'
               }`}
             >
               <div className="p-6 space-y-4">
@@ -288,7 +288,7 @@ export default function Announcements() {
                       <button
                         onClick={() => handleOpenEditModal(item)}
                         title="Edit"
-                        className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                        className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -309,12 +309,12 @@ export default function Announcements() {
                 </p>
               </div>
 
-              <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+              <div className="px-6 py-3.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                 <span>
                   Posted by <strong className="text-slate-700">{item.author?.name || 'Administrator'}</strong>
                 </span>
-                <span>
-                  {new Date(item.created_at).toLocaleDateString('id-ID', {
+                <span className="font-medium font-mono text-slate-400">
+                  {new Date(item.created_at).toLocaleDateString('en-US', {
                     day: 'numeric',
                     month: 'short',
                     year: 'numeric',
@@ -360,7 +360,7 @@ export default function Announcements() {
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="e.g. Townhall Meeting Q3 Schedule"
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:bg-white transition-all"
                 />
               </div>
 
@@ -371,12 +371,12 @@ export default function Announcements() {
                 <select
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:bg-white transition-all"
                 >
-                  <option value="GENERAL">General (Info)</option>
-                  <option value="IMPORTANT">Important (Penting)</option>
-                  <option value="EVENT">Event (Kegiatan)</option>
-                  <option value="MAINTENANCE">Maintenance (Pemeliharaan)</option>
+                  <option value="GENERAL">General</option>
+                  <option value="IMPORTANT">Important</option>
+                  <option value="EVENT">Event</option>
+                  <option value="MAINTENANCE">Maintenance</option>
                 </select>
               </div>
 
@@ -390,7 +390,7 @@ export default function Announcements() {
                   value={formData.content}
                   onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                   placeholder="Write the full announcement message here..."
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 focus:bg-white transition-all"
                 />
               </div>
 
@@ -400,7 +400,7 @@ export default function Announcements() {
                   id="is_active"
                   checked={formData.is_active}
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
+                  className="w-4 h-4 rounded text-red-600 focus:ring-red-500 border-slate-300"
                 />
                 <label htmlFor="is_active" className="text-xs font-medium text-slate-700 select-none">
                   Publish immediately (Active)
@@ -418,7 +418,7 @@ export default function Announcements() {
                 <button
                   type="submit"
                   disabled={formSubmitting}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-blue-500/20 disabled:opacity-50"
+                  className="px-5 py-2.5 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white rounded-xl text-xs font-semibold transition-all shadow-md shadow-red-600/20 disabled:opacity-50"
                 >
                   {formSubmitting ? 'Saving...' : editingItem ? 'Update Announcement' : 'Publish'}
                 </button>
