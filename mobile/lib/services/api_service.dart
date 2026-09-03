@@ -73,14 +73,14 @@ class ApiService {
       );
 
       if (response.body.trim().isEmpty) {
-        throw Exception('Server mengembalikan respon kosong (${response.statusCode}). Pastikan backend Go sedang berjalan.');
+        throw Exception('Server returned an empty response (${response.statusCode}). Please ensure backend is running.');
       }
 
       dynamic data;
       try {
         data = jsonDecode(response.body);
       } catch (e) {
-        throw Exception('Gagal membaca respon server (${response.statusCode}). Pastikan server backend berjalan di ${ApiConfig.baseUrl}');
+        throw Exception('Failed to parse server response (${response.statusCode}). Please ensure backend is running at ${ApiConfig.baseUrl}');
       }
 
       if (response.statusCode == 200 && data is Map<String, dynamic>) {
@@ -93,7 +93,7 @@ class ApiService {
       } else {
         final errMsg = (data is Map && data['error'] != null)
             ? data['error'].toString()
-            : 'Gagal login (Status ${response.statusCode})';
+            : 'Login failed (Status ${response.statusCode})';
         throw Exception(errMsg);
       }
     } catch (e) {

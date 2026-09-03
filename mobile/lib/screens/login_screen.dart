@@ -68,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     if (email.isEmpty || password.isEmpty) {
       setState(() {
-        _errorMessage = 'Silakan masukkan Email dan Password Anda.';
+        _errorMessage = 'Please enter your email and password.';
       });
       return;
     }
@@ -221,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             ),
                             const SizedBox(height: 4),
                             const Text(
-                              'Masukkan akun Anda untuk Check-In & Absensi',
+                              'Sign in to your account for attendance check-in',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: Color(0xFF64748B),

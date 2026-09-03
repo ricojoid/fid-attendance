@@ -733,7 +733,7 @@ export default function UserManagement() {
                     onChange={(e) => setFormData({ ...formData, approver_name: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
                   >
-                    <option value="">-- Pilih Approver --</option>
+                    <option value="">-- Select Approver --</option>
                     {getDeptHeadForDepartment(formData.department, editingUser?.id) && (
                       <option value={getDeptHeadForDepartment(formData.department, editingUser?.id).name}>
                         {getDeptHeadForDepartment(formData.department, editingUser?.id).name} (Dept Head - {formData.department})
@@ -758,7 +758,7 @@ export default function UserManagement() {
                     onChange={(e) => setFormData({ ...formData, approver_name: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
                   >
-                    <option value="">-- Pilih Manager --</option>
+                    <option value="">-- Select Manager --</option>
                     {getManagers(editingUser?.id).map((m) => (
                       <option key={m.id} value={m.name}>
                         {m.name} (Manager - {m.department || 'General'})
@@ -771,7 +771,7 @@ export default function UserManagement() {
                     onChange={(e) => setFormData({ ...formData, approver_name: e.target.value })}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
                   >
-                    <option value="">-- Pilih Approver --</option>
+                    <option value="">-- Select Approver --</option>
                     {getExecutives(editingUser?.id).map((ex) => (
                       <option key={ex.id} value={ex.name}>
                         {ex.name} ({ex.role})

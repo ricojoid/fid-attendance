@@ -36,6 +36,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     ApiService.refreshInboxCount();
   }
 
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   Future<void> _loadSavedPhoto() async {
     try {
       final profile = await ApiService.getMe();
@@ -282,26 +287,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 320),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (Widget child, Animation<double> animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.96, end: 1.0).animate(
-                CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-              ),
-              child: child,
-            ),
-          );
-        },
-        child: IndexedStack(
-          key: ValueKey<int>(_currentIndex == 2 ? 0 : _currentIndex),
-          index: _currentIndex == 2 ? 0 : _currentIndex,
-          children: _screens,
-        ),
+      body: AnimatedIndexedStack(
+        index: _currentIndex == 2 ? 0 : _currentIndex,
+        children: _screens,
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
@@ -407,6 +395,90 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               label: 'Account',
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Smooth Animated IndexedStack that preserves child state and animates
+/// with subtle direction-aware slide and fade transitions between tabs.
+class AnimatedIndexedStack extends StatefulWidget {
+  final int index;
+  final List<Widget> children;
+  final Duration duration;
+
+  const AnimatedIndexedStack({
+    super.key,
+    required this.index,
+    required this.children,
+    this.duration = const Duration(milliseconds: 280),
+  });
+
+  @override
+  State<AnimatedIndexedStack> createState() => _AnimatedIndexedStackState();
+}
+
+class _AnimatedIndexedStackState extends State<AnimatedIndexedStack>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+  int _currentIndex = 0;
+  int _previousIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.index;
+    _controller = AnimationController(vsync: this, duration: widget.duration);
+    _fadeAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _slideAnimation = Tween<Offset>(begin: Offset.zero, end: Offset.zero).animate(_controller);
+    _controller.value = 1.0;
+  }
+
+  @override
+  void didUpdateWidget(covariant AnimatedIndexedStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.index != _currentIndex) {
+      _previousIndex = _currentIndex;
+      _currentIndex = widget.index;
+
+      final isForward = _currentIndex > _previousIndex;
+      final beginOffset = isForward ? const Offset(0.06, 0) : const Offset(-0.06, 0);
+
+      _slideAnimation = Tween<Offset>(
+        begin: beginOffset,
+        end: Offset.zero,
+      ).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+      );
+
+      _controller.forward(from: 0.0);
+    }
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    _controller.value = 1.0;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: IndexedStack(
+          index: _currentIndex,
+          children: widget.children,
         ),
       ),
     );

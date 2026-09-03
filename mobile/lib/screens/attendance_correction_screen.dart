@@ -141,11 +141,11 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                     children: [
                       Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle)),
                       const SizedBox(width: 4),
-                      const Text('Absen / Approved', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
+                      const Text('Present / Approved', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
                       const SizedBox(width: 12),
                       Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle)),
                       const SizedBox(width: 4),
-                      const Text('Belum Absen', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
+                      const Text('Absent / Pending', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ],
