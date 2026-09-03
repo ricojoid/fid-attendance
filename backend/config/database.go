@@ -1,9 +1,11 @@
 package config
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/glebarez/sqlite"
 	"github.com/tmmin-fid/fid-attendance-system/backend/models"
@@ -15,6 +17,34 @@ import (
 
 var DB *gorm.DB
 
+func loadEnv() {
+	envFiles := []string{".env", "backend/.env", "../backend/.env"}
+	for _, envFile := range envFiles {
+		file, err := os.Open(envFile)
+		if err != nil {
+			continue
+		}
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				k := strings.TrimSpace(parts[0])
+				v := strings.TrimSpace(parts[1])
+				v = strings.Trim(v, `"'`)
+				if os.Getenv(k) == "" {
+					_ = os.Setenv(k, v)
+				}
+			}
+		}
+		break
+	}
+}
+
 func getEnvOrDefault(key, defaultValue string) string {
 	val := os.Getenv(key)
 	if val == "" {
@@ -24,6 +54,8 @@ func getEnvOrDefault(key, defaultValue string) string {
 }
 
 func InitDB() *gorm.DB {
+	loadEnv()
+
 	dbDriver := getEnvOrDefault("DB_DRIVER", "postgres")
 	var dialector gorm.Dialector
 
@@ -32,7 +64,7 @@ func InitDB() *gorm.DB {
 		port := getEnvOrDefault("DB_PORT", "5432")
 		user := getEnvOrDefault("DB_USER", "postgres")
 		password := getEnvOrDefault("DB_PASSWORD", "admin123")
-		dbname := getEnvOrDefault("DB_NAME", "fid_attendance")
+		dbname := getEnvOrDefault("DB_NAME", "postgres")
 		sslmode := getEnvOrDefault("DB_SSLMODE", "disable")
 
 		dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s",

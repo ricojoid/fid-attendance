@@ -16,7 +16,6 @@ import {
   Users,
   UserCog,
   Briefcase,
-  Sparkles,
 } from 'lucide-react';
 
 export const MASTER_DEPARTMENTS = [
@@ -53,6 +52,7 @@ export default function UserManagement() {
     role: 'EMPLOYEE',
     department: 'App Dev & Data AI',
     birth_date: '',
+    approver_name: '',
   });
 
   const [mappingData, setMappingData] = useState({
@@ -62,6 +62,33 @@ export default function UserManagement() {
 
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Helper to find Department Head of a specific department
+  const getDeptHeadForDepartment = (deptName, excludeUserId = null) => {
+    if (!deptName) return null;
+    return users.find((u) => {
+      if (excludeUserId && u.id === excludeUserId) return false;
+      const isDeptHead = u.role === 'DEPARTMENT_HEAD';
+      const isSameDept = (u.department || '').trim().toLowerCase() === deptName.trim().toLowerCase();
+      return isDeptHead && isSameDept;
+    });
+  };
+
+  // Helper to get Managers
+  const getManagers = (excludeUserId = null) => {
+    return users.filter((u) => {
+      if (excludeUserId && u.id === excludeUserId) return false;
+      return u.role === 'MANAGER';
+    });
+  };
+
+  // Helper to get Executives (Country Head / Super Admin)
+  const getExecutives = (excludeUserId = null) => {
+    return users.filter((u) => {
+      if (excludeUserId && u.id === excludeUserId) return false;
+      return u.role === 'COUNTRY_HEAD' || u.role === 'SUPER_ADMIN';
+    });
+  };
 
   const stats = useMemo(() => {
     const total = users.length;
@@ -88,30 +115,103 @@ export default function UserManagement() {
     fetchUsers();
   }, [search, departmentFilter]);
 
+  const handleDepartmentChange = (newDept) => {
+    setFormData((prev) => {
+      let updatedApprover = prev.approver_name;
+      if (prev.role === 'EMPLOYEE') {
+        const deptHead = getDeptHeadForDepartment(newDept, editingUser?.id);
+        updatedApprover = deptHead ? deptHead.name : '';
+      }
+      return {
+        ...prev,
+        department: newDept,
+        approver_name: updatedApprover,
+      };
+    });
+  };
+
+  const handleRoleChange = (newRole) => {
+    setFormData((prev) => {
+      let updatedApprover = prev.approver_name;
+      if (newRole === 'EMPLOYEE') {
+        const deptHead = getDeptHeadForDepartment(prev.department, editingUser?.id);
+        updatedApprover = deptHead ? deptHead.name : '';
+      } else if (newRole === 'DEPARTMENT_HEAD') {
+        // If current approver is not a manager, clear it so user selects a manager
+        const isManager = users.some(
+          (u) => u.role === 'MANAGER' && u.name.toLowerCase() === (updatedApprover || '').toLowerCase()
+        );
+        if (!isManager) {
+          updatedApprover = '';
+        }
+      } else if (newRole === 'SUPER_ADMIN' || newRole === 'COUNTRY_HEAD') {
+        updatedApprover = '';
+      }
+      return {
+        ...prev,
+        role: newRole,
+        approver_name: updatedApprover,
+      };
+    });
+  };
+
   const handleOpenModal = (userToEdit = null) => {
     setError('');
     setSuccess('');
     if (userToEdit) {
       setEditingUser(userToEdit);
+      const userRole = userToEdit.role || 'EMPLOYEE';
+      const userDept = userToEdit.department || 'App Dev & Data AI';
+
+      let approver = userToEdit.approver_name || '';
+
+      // If approver not yet in DB, check localStorage
+      if (!approver) {
+        const emailKey = (userToEdit.email || '').toLowerCase().trim();
+        const nipKey = (userToEdit.nip || '').toLowerCase().trim();
+        const idKey = userToEdit.id ? userToEdit.id.toString() : '';
+        for (const k of [emailKey, userToEdit.email, nipKey, idKey]) {
+          if (k) {
+            const direct = localStorage.getItem(`assigned_approver_${k}`) || localStorage.getItem(`flutter.assigned_approver_${k}`);
+            if (direct) {
+              approver = direct;
+              break;
+            }
+          }
+        }
+      }
+
+      // Auto-assign to Dept Head if user is EMPLOYEE and approver is empty or not set
+      if (userRole === 'EMPLOYEE') {
+        const deptHead = getDeptHeadForDepartment(userDept, userToEdit.id);
+        if (deptHead) {
+          approver = deptHead.name;
+        }
+      }
+
       setFormData({
         nip: userToEdit.nip,
         name: userToEdit.name,
         email: userToEdit.email,
         password: '',
-        role: userToEdit.role || 'EMPLOYEE',
-        department: userToEdit.department || 'App Dev & Data AI',
+        role: userRole,
+        department: userDept,
         birth_date: userToEdit.birth_date || '',
+        approver_name: approver,
       });
     } else {
       setEditingUser(null);
+      const defaultDept = 'App Dev & Data AI';
+      const deptHead = getDeptHeadForDepartment(defaultDept);
       setFormData({
         nip: `EMP${Math.floor(100 + Math.random() * 900)}`,
         name: '',
         email: '',
         password: '',
         role: 'EMPLOYEE',
-        department: 'App Dev & Data AI',
+        department: defaultDept,
         birth_date: '',
+        approver_name: deptHead ? deptHead.name : '',
       });
     }
     setIsModalOpen(true);
@@ -151,7 +251,16 @@ export default function UserManagement() {
       }
     }
 
-    if (matchedName) {
+    // Auto-select Dept Head for EMPLOYEE if approver is still empty
+    if (!matchedName && (user.role === 'EMPLOYEE' || !user.role)) {
+      const deptHead = getDeptHeadForDepartment(user.department, user.id);
+      if (deptHead) {
+        matchedName = deptHead.name;
+        matchedUserId = deptHead.id.toString();
+      }
+    }
+
+    if (matchedName && !matchedUserId) {
       const foundUser = users.find((u) => u?.name && u.name.toLowerCase() === matchedName.toLowerCase());
       if (foundUser) {
         matchedUserId = (foundUser.id ?? '').toString();
@@ -213,11 +322,35 @@ export default function UserManagement() {
     try {
       if (editingUser) {
         await api.put(`/admin/users/${editingUser.id}`, formData);
-        setSuccess('User updated successfully');
+        setSuccess(`User ${formData.name} updated successfully`);
       } else {
         await api.post('/admin/users', formData);
-        setSuccess('User created successfully');
+        setSuccess(`User ${formData.name} created successfully`);
       }
+
+      // Sync approver_name to localStorage keys for web & mobile
+      const appName = formData.approver_name || '';
+      const emailKey = (formData.email || '').toLowerCase().trim();
+      const nipKey = (formData.nip || '').toLowerCase().trim();
+      const idKey = editingUser?.id ? editingUser.id.toString() : '';
+
+      [emailKey, formData.email, nipKey, idKey].forEach((k) => {
+        if (k) {
+          if (appName) {
+            const payload = JSON.stringify({ approverName: appName });
+            localStorage.setItem(`assigned_approver_${k}`, appName);
+            localStorage.setItem(`flutter.assigned_approver_${k}`, appName);
+            localStorage.setItem(`approval_mapping_${k}`, payload);
+            localStorage.setItem(`flutter.approval_mapping_${k}`, payload);
+          } else {
+            localStorage.removeItem(`assigned_approver_${k}`);
+            localStorage.removeItem(`flutter.assigned_approver_${k}`);
+            localStorage.removeItem(`approval_mapping_${k}`);
+            localStorage.removeItem(`flutter.approval_mapping_${k}`);
+          }
+        }
+      });
+
       handleCloseModal();
       fetchUsers();
     } catch (err) {
@@ -376,7 +509,7 @@ export default function UserManagement() {
                 <th className="px-6 py-4 font-semibold">Birth Date</th>
                 <th className="px-6 py-4 font-semibold">Department</th>
                 <th className="px-6 py-4 font-semibold">Role</th>
-                <th className="px-6 py-4 font-semibold">Approver (DB)</th>
+                <th className="px-6 py-4 font-semibold">Approver</th>
                 <th className="px-6 py-4 font-semibold text-right">Actions</th>
               </tr>
             </thead>
@@ -395,6 +528,7 @@ export default function UserManagement() {
                   const nipKey = (u.nip || '').toLowerCase().trim();
                   const idKey = u.id ? u.id.toString() : '';
 
+                  const deptHead = getDeptHeadForDepartment(u.department, u.id);
                   let approverName = u.approver_name || null;
                   if (!approverName) {
                     for (const k of [emailKey, u.email, nipKey, idKey]) {
@@ -416,6 +550,10 @@ export default function UserManagement() {
                         }
                       }
                     }
+                  }
+
+                  if (!approverName && (u.role === 'EMPLOYEE' || !u.role) && deptHead) {
+                    approverName = deptHead.name;
                   }
 
                   const hasApprover = Boolean(approverName);
@@ -557,7 +695,7 @@ export default function UserManagement() {
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Role</label>
                   <select
                     value={formData.role}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    onChange={(e) => handleRoleChange(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-900"
                   >
                     <option value="EMPLOYEE">Employee</option>
@@ -572,7 +710,7 @@ export default function UserManagement() {
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Department</label>
                   <select
                     value={formData.department}
-                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                    onChange={(e) => handleDepartmentChange(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
                   >
                     {MASTER_DEPARTMENTS.map((dept) => (
@@ -582,6 +720,73 @@ export default function UserManagement() {
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* Approver Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                  Approver
+                </label>
+                {formData.role === 'EMPLOYEE' ? (
+                  <select
+                    value={formData.approver_name}
+                    onChange={(e) => setFormData({ ...formData, approver_name: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                  >
+                    <option value="">-- Pilih Approver --</option>
+                    {getDeptHeadForDepartment(formData.department, editingUser?.id) && (
+                      <option value={getDeptHeadForDepartment(formData.department, editingUser?.id).name}>
+                        {getDeptHeadForDepartment(formData.department, editingUser?.id).name} (Dept Head - {formData.department})
+                      </option>
+                    )}
+                    {users
+                      .filter(
+                        (u) =>
+                          u.id !== editingUser?.id &&
+                          (u.role === 'DEPARTMENT_HEAD' || u.role === 'MANAGER') &&
+                          u.name !== getDeptHeadForDepartment(formData.department, editingUser?.id)?.name
+                      )
+                      .map((u) => (
+                        <option key={u.id} value={u.name}>
+                          {u.name} ({u.role === 'DEPARTMENT_HEAD' ? 'Dept Head' : u.role} - {u.department || 'General'})
+                        </option>
+                      ))}
+                  </select>
+                ) : formData.role === 'DEPARTMENT_HEAD' ? (
+                  <select
+                    value={formData.approver_name}
+                    onChange={(e) => setFormData({ ...formData, approver_name: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                  >
+                    <option value="">-- Pilih Manager --</option>
+                    {getManagers(editingUser?.id).map((m) => (
+                      <option key={m.id} value={m.name}>
+                        {m.name} (Manager - {m.department || 'General'})
+                      </option>
+                    ))}
+                  </select>
+                ) : formData.role === 'MANAGER' ? (
+                  <select
+                    value={formData.approver_name}
+                    onChange={(e) => setFormData({ ...formData, approver_name: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                  >
+                    <option value="">-- Pilih Approver --</option>
+                    {getExecutives(editingUser?.id).map((ex) => (
+                      <option key={ex.id} value={ex.name}>
+                        {ex.name} ({ex.role})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    value={formData.approver_name}
+                    onChange={(e) => setFormData({ ...formData, approver_name: e.target.value })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+                  >
+                    <option value="">-- None --</option>
+                  </select>
+                )}
               </div>
 
               <div>
@@ -631,8 +836,9 @@ export default function UserManagement() {
             <form onSubmit={handleSaveMapping} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Approver (DB)
+                  Approver
                 </label>
+
                 <select
                   value={mappingData.approverUserId}
                   onChange={(e) => {
@@ -645,13 +851,32 @@ export default function UserManagement() {
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
                 >
                   <option value="">-- Select Approver --</option>
-                  {users
-                    .filter((u) => u.id !== mappingUser.id)
-                    .map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.role})
+                  {mappingUser.role === 'DEPARTMENT_HEAD' ? (
+                    getManagers(mappingUser.id).map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} (Manager - {m.department || 'General'})
                       </option>
-                    ))}
+                    ))
+                  ) : (
+                    <>
+                      {getDeptHeadForDepartment(mappingUser.department, mappingUser.id) && (
+                        <option value={getDeptHeadForDepartment(mappingUser.department, mappingUser.id).id}>
+                          {getDeptHeadForDepartment(mappingUser.department, mappingUser.id).name} (Dept Head - {mappingUser.department})
+                        </option>
+                      )}
+                      {users
+                        .filter(
+                          (u) =>
+                            u.id !== mappingUser.id &&
+                            u.id !== getDeptHeadForDepartment(mappingUser.department, mappingUser.id)?.id
+                        )
+                        .map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name} ({u.role})
+                          </option>
+                        ))}
+                    </>
+                  )}
                 </select>
               </div>
 

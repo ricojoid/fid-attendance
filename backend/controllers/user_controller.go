@@ -65,6 +65,14 @@ func CreateUser(c *gin.Context) {
 		req.Role = "EMPLOYEE"
 	}
 
+	// Auto-assign Dept Head as approver if role is EMPLOYEE and approver is empty
+	if req.Role == "EMPLOYEE" && req.ApproverName == "" && req.Department != "" {
+		var deptHead models.User
+		if err := config.DB.Where("role = ? AND LOWER(department) = LOWER(?)", models.RoleDepartmentHead, req.Department).First(&deptHead).Error; err == nil {
+			req.ApproverName = deptHead.Name
+		}
+	}
+
 	hashed, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
@@ -130,6 +138,11 @@ func UpdateUser(c *gin.Context) {
 	}
 	if req.ApproverName != "" {
 		user.ApproverName = req.ApproverName
+	} else if user.Role == models.RoleEmployee && user.ApproverName == "" && user.Department != "" {
+		var deptHead models.User
+		if err := config.DB.Where("role = ? AND LOWER(department) = LOWER(?)", models.RoleDepartmentHead, user.Department).First(&deptHead).Error; err == nil {
+			user.ApproverName = deptHead.Name
+		}
 	}
 	if req.AvatarURL != "" {
 		user.AvatarURL = req.AvatarURL
