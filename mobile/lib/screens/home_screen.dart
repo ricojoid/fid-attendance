@@ -466,40 +466,52 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     required String snippet,
     required String content,
   }) {
-    Color tagBg = const Color(0xFFFEE2E2);
-    Color tagColor = const Color(0xFFDC2626);
-    Color accentBorder = const Color(0xFFDC2626);
+    List<Color> cardGradient = const [Color(0xFFF0FDF4), Color(0xFFF8FAFC), Colors.white];
+    Color borderColor = const Color(0xFFA7F3D0);
+    Color shadowColor = const Color(0xFF10B981);
+    Color tagBg = const Color(0xFFDCFCE7);
+    Color tagColor = const Color(0xFF047857);
+    Color accentBorder = const Color(0xFF10B981);
 
     if (category == 'IMPORTANT') {
-      tagBg = const Color(0xFFFEF2F2);
-      tagColor = const Color(0xFFEF4444);
-      accentBorder = const Color(0xFFEF4444);
+      cardGradient = const [Color(0xFFFFF1F2), Color(0xFFFFF7F8), Colors.white];
+      borderColor = const Color(0xFFFECDD3);
+      shadowColor = const Color(0xFFE11D48);
+      tagBg = const Color(0xFFFFE4E6);
+      tagColor = const Color(0xFFBE123C);
+      accentBorder = const Color(0xFFE11D48);
     } else if (category == 'EVENT') {
-      tagBg = const Color(0xFFEEF2FF);
-      tagColor = const Color(0xFF6366F1);
+      cardGradient = const [Color(0xFFEEF2FF), Color(0xFFF5F3FF), Colors.white];
+      borderColor = const Color(0xFFC7D2FE);
+      shadowColor = const Color(0xFF6366F1);
+      tagBg = const Color(0xFFE0E7FF);
+      tagColor = const Color(0xFF4338CA);
       accentBorder = const Color(0xFF6366F1);
     } else if (category == 'MAINTENANCE') {
+      cardGradient = const [Color(0xFFFFFBEB), Color(0xFFFEFCE8), Colors.white];
+      borderColor = const Color(0xFFFDE68A);
+      shadowColor = const Color(0xFFD97706);
       tagBg = const Color(0xFFFEF3C7);
-      tagColor = const Color(0xFFD97706);
+      tagColor = const Color(0xFFB45309);
       accentBorder = const Color(0xFFD97706);
-    } else if (category == 'POLICY' || category == 'GENERAL') {
-      tagBg = const Color(0xFFECFDF5);
-      tagColor = const Color(0xFF10B981);
-      accentBorder = const Color(0xFF10B981);
     }
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        gradient: LinearGradient(
+          colors: cardGradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF64748B).withOpacity(0.06),
-            blurRadius: 12,
+            color: shadowColor.withValues(alpha: 0.08),
+            blurRadius: 14,
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(color: const Color(0xFFF1F5F9)),
+        border: Border.all(color: borderColor, width: 1.2),
       ),
       child: Material(
         color: Colors.transparent,
@@ -951,15 +963,26 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     return Center(
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
         decoration: BoxDecoration(
-          color: Colors.white,
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFFECFDF5),
+              Color(0xFFF2FBF7),
+              Colors.white,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.35), width: 1.5),
+          border: Border.all(
+            color: const Color(0xFF6EE7B7).withValues(alpha: 0.7),
+            width: 1.5,
+          ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF10B981).withValues(alpha: 0.08),
-              blurRadius: 20,
+              color: const Color(0xFF10B981).withValues(alpha: 0.12),
+              blurRadius: 24,
               offset: const Offset(0, 8),
             ),
           ],
@@ -968,6 +991,29 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           children: [
             const _AnimatedAttendanceCompletedBadge(),
             const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFD1FAE5),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check_circle_rounded, size: 12, color: Color(0xFF059669)),
+                  SizedBox(width: 4),
+                  Text(
+                    'Daily Shift Complete',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF059669),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
             const Text(
               'Attendance Completed for Today',
               style: TextStyle(
@@ -1480,7 +1526,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             icon: Icons.receipt_long_rounded,
                             gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
                             accentColor: const Color(0xFF10B981),
-                            bgPillColor: const Color(0xFFECFDF5),
+                            bgPillColor: const Color(0xFFD1FAE5),
+                            cardGradient: const [
+                              Color(0xFFF0FDF4),
+                              Color(0xFFF8FAFC),
+                              Colors.white,
+                            ],
+                            borderColor: const Color(0xFFA7F3D0).withValues(alpha: 0.85),
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -1497,7 +1549,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                             icon: Icons.event_available_rounded,
                             gradientColors: const [Color(0xFF4F46E5), Color(0xFF7C3AED)],
                             accentColor: const Color(0xFF6366F1),
-                            bgPillColor: const Color(0xFFEEF2FF),
+                            bgPillColor: const Color(0xFFEDE9FE),
+                            cardGradient: const [
+                              Color(0xFFEEF2FF),
+                              Color(0xFFF8FAFF),
+                              Colors.white,
+                            ],
+                            borderColor: const Color(0xFFC7D2FE).withValues(alpha: 0.85),
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -1542,17 +1600,28 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     // Dynamic Announcement Cards from Backend (Strictly 3 items)
                     if (_announcements.isEmpty)
                       Container(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(22),
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(18),
                           border: Border.all(color: const Color(0xFFE2E8F0)),
                         ),
                         child: const Center(
-                          child: Text(
-                            'No announcements published yet',
-                            style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.campaign_outlined, size: 18, color: Color(0xFF94A3B8)),
+                              SizedBox(width: 8),
+                              Text(
+                                'No announcements published yet',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF64748B)),
+                              ),
+                            ],
                           ),
                         ),
                       )
@@ -1822,6 +1891,8 @@ class _AnimatedActionCard extends StatefulWidget {
   final List<Color> gradientColors;
   final Color accentColor;
   final Color bgPillColor;
+  final List<Color>? cardGradient;
+  final Color? borderColor;
   final VoidCallback onTap;
 
   const _AnimatedActionCard({
@@ -1831,6 +1902,8 @@ class _AnimatedActionCard extends StatefulWidget {
     required this.gradientColors,
     required this.accentColor,
     required this.bgPillColor,
+    this.cardGradient,
+    this.borderColor,
     required this.onTap,
   });
 
@@ -1874,19 +1947,29 @@ class _AnimatedActionCardState extends State<_AnimatedActionCard>
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 14),
           decoration: BoxDecoration(
-            color: Colors.white,
+            gradient: widget.cardGradient != null
+                ? LinearGradient(
+                    colors: widget.cardGradient!,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: widget.cardGradient == null ? Colors.white : null,
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(
+              color: widget.borderColor ?? const Color(0xFFE2E8F0),
+              width: 1.2,
+            ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                color: const Color(0xFF0F172A).withValues(alpha: 0.03),
                 blurRadius: 14,
                 offset: const Offset(0, 4),
               ),
               BoxShadow(
-                color: widget.accentColor.withValues(alpha: 0.06),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
+                color: widget.accentColor.withValues(alpha: 0.09),
+                blurRadius: 18,
+                offset: const Offset(0, 7),
               ),
             ],
           ),
