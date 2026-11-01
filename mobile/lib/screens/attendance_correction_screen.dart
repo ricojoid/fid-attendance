@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
+import '../widgets/approver_banner.dart';
+import '../theme/app_theme.dart';
 
 class AttendanceCorrectionScreen extends StatefulWidget {
   const AttendanceCorrectionScreen({super.key});
@@ -122,7 +124,7 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                       ),
                       Text(
                         DateFormat('MMMM yyyy').format(focusedMonth),
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.text),
                       ),
                       IconButton(
                         icon: const Icon(Icons.chevron_right_rounded),
@@ -141,11 +143,11 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                     children: [
                       Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle)),
                       const SizedBox(width: 4),
-                      const Text('Present / Approved', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
+                      Text('Present / Approved', style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
                       const SizedBox(width: 12),
-                      Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFFEF4444), shape: BoxShape.circle)),
+                      Container(width: 8, height: 8, decoration: BoxDecoration(color: AppColors.red, shape: BoxShape.circle)),
                       const SizedBox(width: 4),
-                      const Text('Absent / Pending', style: TextStyle(fontSize: 10, color: Color(0xFF64748B), fontWeight: FontWeight.w600)),
+                      Text('Absent / Pending', style: TextStyle(fontSize: 10, color: AppColors.textMuted, fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ],
@@ -160,14 +162,14 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                       // Days of week header (Sat & Sun grayed out)
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: const [
-                          Text('Mon', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                          Text('Tue', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                          Text('Wed', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                          Text('Thu', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                          Text('Fri', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                          Text('Sat', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFCBD5E1))),
-                          Text('Sun', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFCBD5E1))),
+                        children: [
+                          Text('Mon', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                          Text('Tue', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                          Text('Wed', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                          Text('Thu', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                          Text('Fri', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textMuted)),
+                          Text('Sat', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.line)),
+                          Text('Sun', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.line)),
                         ],
                       ),
                       const Divider(height: 12),
@@ -195,12 +197,12 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                             return Container(
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF1F5F9),
+                                color: AppColors.line,
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
                                 '$dayNum',
-                                style: const TextStyle(fontSize: 12, color: Color(0xFFCBD5E1)),
+                                style: TextStyle(fontSize: 12, color: AppColors.line),
                               ),
                             );
                           }
@@ -210,7 +212,7 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                               _attendanceDate!.year == date.year &&
                               _attendanceDate!.month == date.month &&
                               _attendanceDate!.day == date.day;
-                          final dotColor = isOk ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+                          final dotColor = isOk ? const Color(0xFF10B981) : AppColors.red;
 
                           return InkWell(
                             onTap: isFuture
@@ -225,14 +227,14 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                             child: Container(
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? const Color(0xFFDC2626)
+                                    ? AppColors.red
                                     : isOk
                                         ? const Color(0xFFECFDF5)
-                                        : const Color(0xFFFEF2F2),
+                                        : AppColors.redSoft,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: isSelected
-                                      ? const Color(0xFFDC2626)
+                                      ? AppColors.red
                                       : isOk
                                           ? const Color(0xFFA7F3D0)
                                           : const Color(0xFFFECACA),
@@ -246,7 +248,7 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
-                                      color: isSelected ? Colors.white : const Color(0xFF0F172A),
+                                      color: isSelected ? Colors.white : AppColors.text,
                                     ),
                                   ),
                                   const SizedBox(height: 2),
@@ -272,7 +274,7 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Close', style: TextStyle(color: Color(0xFF64748B))),
+                  child: Text('Close', style: TextStyle(color: AppColors.textMuted)),
                 ),
               ],
             );
@@ -344,12 +346,12 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        title: const Text('Attendance Correction Form', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
+        title: Text('Attendance Correction Form', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.surface,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AppColors.text),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -358,7 +360,8 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Attendance Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF0F172A))),
+              const ApproverBanner(),
+              Text('Attendance Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.text)),
               const SizedBox(height: 8),
 
               // DatePicker Button displaying Selected Date & Status Dot
@@ -367,10 +370,9 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
+                  decoration: BoxDecoration(color: AppColors.surface,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                    border: Border.all(color: AppColors.line),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -385,7 +387,7 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                               decoration: BoxDecoration(
                                 color: _isDateApprovedOrAttended(_attendanceDate!)
                                     ? const Color(0xFF10B981)
-                                    : const Color(0xFFEF4444),
+                                    : AppColors.red,
                                 shape: BoxShape.circle,
                               ),
                             ),
@@ -393,11 +395,11 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                             _attendanceDate == null
                                 ? 'Select Attendance Date'
                                 : DateFormat('EEEE, dd MMMM yyyy').format(_attendanceDate!),
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text),
                           ),
                         ],
                       ),
-                      const Icon(Icons.calendar_month_rounded, size: 20, color: Color(0xFFDC2626)),
+                      Icon(Icons.calendar_month_rounded, size: 20, color: AppColors.red),
                     ],
                   ),
                 ),
@@ -416,10 +418,9 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                           onTap: () => _selectTime(true),
                           child: Container(
                             padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
+                            decoration: BoxDecoration(color: AppColors.surface,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                              border: Border.all(color: AppColors.line),
                             ),
                             child: Text(
                               _checkInTime == null ? 'Select Time' : _checkInTime!.format(context),
@@ -441,10 +442,9 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                           onTap: () => _selectTime(false),
                           child: Container(
                             padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
+                            decoration: BoxDecoration(color: AppColors.surface,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFCBD5E1)),
+                              border: Border.all(color: AppColors.line),
                             ),
                             child: Text(
                               _checkOutTime == null ? 'Select Time' : _checkOutTime!.format(context),
@@ -468,7 +468,7 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                 decoration: InputDecoration(
                   hintText: 'Describe issue (e.g. forgot check-in / network connection error)...',
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppColors.surface,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
@@ -480,8 +480,8 @@ class _AttendanceCorrectionScreenState extends State<AttendanceCorrectionScreen>
                 child: ElevatedButton(
                   onPressed: _isSubmitting ? null : _handleSubmit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC2626),
-                    disabledBackgroundColor: const Color(0xFFDC2626).withOpacity(0.5),
+                    backgroundColor: AppColors.red,
+                    disabledBackgroundColor: AppColors.red.withOpacity(0.5),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),

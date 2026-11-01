@@ -1,3 +1,9 @@
+import { MASTER_DEPARTMENTS } from '../constants';
+import { NameBadge } from '../components/BadgeMedal';
+import AvatarFrame from '../components/AvatarFrame';
+import FramePicker from '../components/FramePicker';
+import { useAuth } from '../context/AuthContext';
+import { Gift } from 'lucide-react';
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../api/client';
 import {
@@ -18,13 +24,7 @@ import {
   Briefcase,
 } from 'lucide-react';
 
-export const MASTER_DEPARTMENTS = [
-  'App Dev & Data AI',
-  'Service Maintenance',
-  'Procurement',
-  'Sales',
-  'Human Resource',
-];
+export { MASTER_DEPARTMENTS };
 
 export const MASTER_ROLES = [
   { value: 'SUPER_ADMIN', label: 'Super Admin' },
@@ -35,6 +35,9 @@ export const MASTER_ROLES = [
 ];
 
 export default function UserManagement() {
+  const { user: me } = useAuth();
+  const isSuperAdmin = (me?.role || '').toUpperCase() === 'SUPER_ADMIN';
+  const [frameTarget, setFrameTarget] = useState(null);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -407,6 +410,16 @@ export default function UserManagement() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {frameTarget && (
+        <FramePicker
+          mode="admin"
+          target={frameTarget}
+          avatar={frameTarget.avatar_url}
+          name={frameTarget.name}
+          onClose={() => setFrameTarget(null)}
+          onChanged={() => fetchUsers()}
+        />
+      )}
       {/* Metric Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs card-interactive flex items-center justify-between">
@@ -562,11 +575,12 @@ export default function UserManagement() {
                     <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-red-50 text-red-700 font-semibold flex items-center justify-center text-sm border border-red-200">
-                            {u.name ? u.name.charAt(0).toUpperCase() : 'U'}
-                          </div>
+                          <AvatarFrame frame={u.avatar_frame} src={u.avatar_url} name={u.name} size={36} animate={false} />
                           <div>
-                            <p className="font-semibold text-slate-900">{u.name}</p>
+                            <p className="font-semibold text-slate-900 flex items-center gap-1.5">
+                              {u.name}
+                              <NameBadge top={u.top_badge} />
+                            </p>
                             <p className="text-xs text-slate-500">{u.email}</p>
                           </div>
                         </div>
@@ -597,6 +611,15 @@ export default function UserManagement() {
                           >
                             <UserCheck className="w-4 h-4" />
                           </button>
+                          {isSuperAdmin && (
+                            <button
+                              onClick={() => setFrameTarget(u)}
+                              className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
+                              title="Give avatar frame"
+                            >
+                              <Gift className="w-4 h-4" />
+                            </button>
+                          )}
                           <button
                             onClick={() => handleOpenModal(u)}
                             className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-slate-100 rounded-md transition-colors"

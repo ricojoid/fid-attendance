@@ -1,11 +1,12 @@
-import 'dart:convert';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../services/live_events.dart';
+import '../theme/app_theme.dart';
+import '../utils/avatar_cache.dart';
+import '../widgets/motion.dart';
 import 'home_screen.dart';
 import 'employees_screen.dart';
-import 'inbox_screen.dart';
+import 'timeline_screen.dart';
 import 'account_screen.dart';
 import 'leave_request_screen.dart';
 import 'attendance_correction_screen.dart';
@@ -25,7 +26,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     HomeScreen(),
     EmployeesScreen(),
     SizedBox.shrink(), // Center tab placeholder for modal popup trigger
-    InboxScreen(),
+    TimelineScreen(),
     AccountScreen(),
   ];
 
@@ -34,6 +35,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     super.initState();
     _loadSavedPhoto();
     ApiService.refreshInboxCount();
+    LiveEvents.start(); // live announcements while signed in
   }
 
   @override
@@ -61,77 +63,23 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
   }
 
-  Widget _buildBadgeIcon({required Widget child, required int count}) {
-    if (count <= 0) return child;
-
-    final badgeText = count > 99 ? '99+' : count.toString();
-
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        child,
-        Positioned(
-          top: -4,
-          right: -8,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEF4444),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white, width: 1.5),
-            ),
-            constraints: const BoxConstraints(
-              minWidth: 16,
-              minHeight: 16,
-            ),
-            child: Text(
-              badgeText,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                height: 1.0,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildAccountAvatarIcon(String? photoStr, {required bool isSelected}) {
-    if (photoStr != null && photoStr.isNotEmpty) {
-      ImageProvider? imageProvider;
-      if (photoStr.startsWith('data:image')) {
-        final base64Str = photoStr.split(',').last;
-        imageProvider = MemoryImage(base64Decode(base64Str));
-      } else if (kIsWeb || photoStr.startsWith('http') || photoStr.startsWith('blob:')) {
-        imageProvider = NetworkImage(photoStr);
-      } else {
-        imageProvider = FileImage(File(photoStr));
-      }
-
-      return Container(
+    final img = AvatarCache.provider(photoStr, cacheWidth: 96);
+    if (img != null) {
+      return AnimatedContainer(
+        duration: AppMotion.medium,
         width: 26,
         height: 26,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(
-            color: isSelected ? const Color(0xFFDC2626) : Colors.transparent,
-            width: 2,
-          ),
-          image: DecorationImage(
-            image: imageProvider,
-            fit: BoxFit.cover,
-          ),
+          border: Border.all(color: isSelected ? AppColors.red : Colors.transparent, width: 2),
+          image: DecorationImage(image: img, fit: BoxFit.cover),
         ),
       );
     }
-
     return Icon(
-      Icons.person_rounded,
-      color: isSelected ? const Color(0xFFDC2626) : const Color(0xFF94A3B8),
+      isSelected ? Icons.person_rounded : Icons.person_outline_rounded,
+      color: isSelected ? AppColors.red : AppColors.textFaint,
     );
   }
 
@@ -143,9 +91,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       builder: (ctx) {
         return SafeArea(
           child: Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            decoration: BoxDecoration(color: AppColors.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
             ),
             padding: const EdgeInsets.all(24),
             child: SingleChildScrollView(
@@ -158,21 +105,21 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                       width: 40,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFCBD5E1),
+                        color: AppColors.line,
                         borderRadius: BorderRadius.circular(10),
                       ),
                     ),
                   ),
                   const SizedBox(height: 20),
 
-                  const Text(
+                  Text(
                     'Submit Application & Request',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.text),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
+                  Text(
                     'Choose the type of request you would like to submit:',
-                    style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+                    style: TextStyle(fontSize: 13, color: AppColors.textMuted),
                   ),
                   const SizedBox(height: 20),
 
@@ -188,38 +135,38 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF9FAFB),
+                        color: AppColors.bg,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        border: Border.all(color: AppColors.line),
                       ),
                       child: Row(
                         children: [
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFEE2E2),
+                              color: AppColors.redSoft,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.beach_access_rounded, color: Color(0xFFDC2626), size: 28),
+                            child: Icon(Icons.beach_access_rounded, color: AppColors.red, size: 28),
                           ),
                           const SizedBox(width: 14),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   'Request Leave',
-                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text),
                                 ),
-                                SizedBox(height: 2),
+                                const SizedBox(height: 2),
                                 Text(
                                   'Apply for annual leave, sick leave, or special leave',
-                                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                                 ),
                               ],
                             ),
                           ),
-                          const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF94A3B8)),
+                          Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.textFaint),
                         ],
                       ),
                     ),
@@ -238,9 +185,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF9FAFB),
+                        color: AppColors.bg,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        border: Border.all(color: AppColors.line),
                       ),
                       child: Row(
                         children: [
@@ -253,23 +200,23 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                             child: const Icon(Icons.edit_calendar_rounded, color: Color(0xFFD97706), size: 28),
                           ),
                           const SizedBox(width: 14),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   'Pending Attendance',
-                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.text),
                                 ),
-                                SizedBox(height: 2),
+                                const SizedBox(height: 2),
                                 Text(
                                   'Correction for forgotten check-in or signal issue',
-                                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                  style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                                 ),
                               ],
                             ),
                           ),
-                          const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF94A3B8)),
+                          Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.textFaint),
                         ],
                       ),
                     ),
@@ -286,123 +233,164 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Scaffold(
+      extendBody: false,
       body: AnimatedIndexedStack(
         index: _currentIndex == 2 ? 0 : _currentIndex,
         children: _screens,
       ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 10,
-              offset: Offset(0, -2),
-            ),
-          ],
-        ),
-        child: BottomNavigationBar(
+      bottomNavigationBar: Padding(
+        padding: EdgeInsets.fromLTRB(16, 0, 16, bottomInset > 0 ? bottomInset : 14),
+        child: _FloatingNavBar(
           currentIndex: _currentIndex,
           onTap: (index) {
             if (index == 2) {
               _showRequestModal(context);
-            } else {
+            } else if (index != _currentIndex) {
               setState(() => _currentIndex = index);
             }
           },
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: const Color(0xFFDC2626),
-          unselectedItemColor: const Color(0xFF94A3B8),
-          selectedFontSize: 12,
-          unselectedFontSize: 12,
-          elevation: 0,
-          items: [
-            BottomNavigationBarItem(
-              icon: AnimatedScale(
-                scale: _currentIndex == 0 ? 1.15 : 1.0,
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutBack,
-                child: const Icon(Icons.home_rounded),
-              ),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: AnimatedScale(
-                scale: _currentIndex == 1 ? 1.15 : 1.0,
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutBack,
-                child: const Icon(Icons.people_rounded),
-              ),
-              label: 'Employees',
-            ),
-            BottomNavigationBarItem(
-              icon: AnimatedScale(
-                scale: _currentIndex == 2 ? 1.15 : 1.0,
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutBack,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFDC2626),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0x40DC2626),
-                        blurRadius: 6,
-                        offset: Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
-                ),
-              ),
-              label: 'Request',
-            ),
-            BottomNavigationBarItem(
-              icon: AnimatedScale(
-                scale: _currentIndex == 3 ? 1.15 : 1.0,
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutBack,
-                child: ValueListenableBuilder<int>(
-                  valueListenable: ApiService.inboxBadgeNotifier,
-                  builder: (context, count, _) {
-                    return _buildBadgeIcon(
-                      child: const Icon(Icons.inbox_rounded),
-                      count: count,
-                    );
-                  },
-                ),
-              ),
-              label: 'Inbox',
-            ),
-            BottomNavigationBarItem(
-              icon: AnimatedScale(
-                scale: _currentIndex == 4 ? 1.15 : 1.0,
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutBack,
-                child: ValueListenableBuilder<String?>(
-                  valueListenable: ApiService.profilePhotoNotifier,
-                  builder: (context, notifierPhoto, _) {
-                    final photo = (notifierPhoto != null && notifierPhoto.isNotEmpty)
-                        ? notifierPhoto
-                        : _currentSavedPhoto;
-                    return _buildAccountAvatarIcon(photo, isSelected: _currentIndex == 4);
-                  },
-                ),
-              ),
-              label: 'Account',
-            ),
-          ],
+          inboxIcon: Icon(
+            _currentIndex == 3 ? Icons.dynamic_feed_rounded : Icons.dynamic_feed_outlined,
+            color: _currentIndex == 3 ? AppColors.red : AppColors.textFaint,
+          ),
+          accountIcon: ValueListenableBuilder<String?>(
+            valueListenable: ApiService.profilePhotoNotifier,
+            builder: (context, notifierPhoto, _) {
+              final photo = (notifierPhoto != null && notifierPhoto.isNotEmpty) ? notifierPhoto : _currentSavedPhoto;
+              return _buildAccountAvatarIcon(photo, isSelected: _currentIndex == 4);
+            },
+          ),
         ),
       ),
     );
   }
 }
 
-/// Smooth Animated IndexedStack that preserves child state and animates
-/// with subtle direction-aware slide and fade transitions between tabs.
+class _FloatingNavBar extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  final Widget inboxIcon;
+  final Widget accountIcon;
+
+  const _FloatingNavBar({
+    required this.currentIndex,
+    required this.onTap,
+    required this.inboxIcon,
+    required this.accountIcon,
+  });
+
+  static const _labels = ['Home', 'Team', '', 'Feed', 'Account'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 70,
+      decoration: BoxDecoration(color: AppColors.surface,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: AppColors.line),
+        boxShadow: [
+          BoxShadow(color: AppColors.text.withValues(alpha: 0.10), blurRadius: 30, offset: const Offset(0, 12)),
+        ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final slot = constraints.maxWidth / 5;
+          final showPill = currentIndex != 2;
+          return Stack(
+            children: [
+              // Sliding selection pill.
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 420),
+                curve: AppMotion.emphasized,
+                left: slot * currentIndex + 8,
+                top: 9,
+                width: slot - 16,
+                height: 52,
+                child: AnimatedOpacity(
+                  opacity: showPill ? 1 : 0,
+                  duration: AppMotion.fast,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(color: AppColors.redSoft, borderRadius: BorderRadius.circular(18)),
+                  ),
+                ),
+              ),
+              Row(
+                children: List.generate(5, (i) {
+                  if (i == 2) {
+                    return SizedBox(
+                      width: slot,
+                      child: Center(
+                        child: Pressable(
+                          pressedScale: 0.88,
+                          onTap: () => onTap(2),
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              gradient: AppGradients.brand,
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: AppShadows.glow(AppColors.red, strength: 0.4),
+                            ),
+                            child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  final selected = currentIndex == i;
+                  Widget icon;
+                  if (i == 3) {
+                    icon = inboxIcon;
+                  } else if (i == 4) {
+                    icon = accountIcon;
+                  } else {
+                    icon = Icon(
+                      i == 0 ? (selected ? Icons.home_rounded : Icons.home_outlined) : (selected ? Icons.people_alt_rounded : Icons.people_alt_outlined),
+                      color: selected ? AppColors.red : AppColors.textFaint,
+                    );
+                  }
+                  return SizedBox(
+                    width: slot,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => onTap(i),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          AnimatedScale(
+                            scale: selected ? 1.12 : 1.0,
+                            duration: AppMotion.medium,
+                            curve: Curves.easeOutBack,
+                            child: icon,
+                          ),
+                          const SizedBox(height: 3),
+                          AnimatedDefaultTextStyle(
+                            duration: AppMotion.medium,
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: selected ? FontWeight.w900 : FontWeight.w600,
+                              color: selected ? AppColors.red : AppColors.textFaint,
+                            ),
+                            child: Text(_labels[i]),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// IndexedStack that keeps tab state, cross-fades on switch, and — crucially
+/// for performance — disables tickers (animations, live clock) on hidden tabs.
 class AnimatedIndexedStack extends StatefulWidget {
   final int index;
   final List<Widget> children;
@@ -412,56 +400,32 @@ class AnimatedIndexedStack extends StatefulWidget {
     super.key,
     required this.index,
     required this.children,
-    this.duration = const Duration(milliseconds: 280),
+    this.duration = const Duration(milliseconds: 300),
   });
 
   @override
   State<AnimatedIndexedStack> createState() => _AnimatedIndexedStackState();
 }
 
-class _AnimatedIndexedStackState extends State<AnimatedIndexedStack>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
-  int _currentIndex = 0;
-  int _previousIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _currentIndex = widget.index;
-    _controller = AnimationController(vsync: this, duration: widget.duration);
-    _fadeAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _slideAnimation = Tween<Offset>(begin: Offset.zero, end: Offset.zero).animate(_controller);
-    _controller.value = 1.0;
-  }
+class _AnimatedIndexedStackState extends State<AnimatedIndexedStack> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(vsync: this, duration: widget.duration, value: 1);
+  late final Animation<double> _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+  Animation<Offset> _slide = const AlwaysStoppedAnimation(Offset.zero);
+  late int _currentIndex = widget.index;
+  // Tabs are built lazily the first time they are opened (faster start-up).
+  late final Set<int> _visited = {widget.index};
 
   @override
   void didUpdateWidget(covariant AnimatedIndexedStack oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.index != _currentIndex) {
-      _previousIndex = _currentIndex;
+      final forward = widget.index > _currentIndex;
       _currentIndex = widget.index;
-
-      final isForward = _currentIndex > _previousIndex;
-      final beginOffset = isForward ? const Offset(0.06, 0) : const Offset(-0.06, 0);
-
-      _slideAnimation = Tween<Offset>(
-        begin: beginOffset,
-        end: Offset.zero,
-      ).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-      );
-
-      _controller.forward(from: 0.0);
+      _visited.add(_currentIndex);
+      _slide = Tween<Offset>(begin: Offset(forward ? 0.04 : -0.04, 0), end: Offset.zero)
+          .animate(CurvedAnimation(parent: _controller, curve: AppMotion.emphasized));
+      _controller.forward(from: 0);
     }
-  }
-
-  @override
-  void reassemble() {
-    super.reassemble();
-    _controller.value = 1.0;
   }
 
   @override
@@ -473,12 +437,18 @@ class _AnimatedIndexedStackState extends State<AnimatedIndexedStack>
   @override
   Widget build(BuildContext context) {
     return FadeTransition(
-      opacity: _fadeAnimation,
+      opacity: _fade,
       child: SlideTransition(
-        position: _slideAnimation,
+        position: _slide,
         child: IndexedStack(
           index: _currentIndex,
-          children: widget.children,
+          children: [
+            for (var i = 0; i < widget.children.length; i++)
+              TickerMode(
+                enabled: i == _currentIndex,
+                child: _visited.contains(i) ? widget.children[i] : const SizedBox.shrink(),
+              ),
+          ],
         ),
       ),
     );

@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import api from '../api/client';
-import { MASTER_DEPARTMENTS } from './UserManagement';
+import api, { getUserBadges } from '../api/client';
+import { Link } from 'react-router-dom';
+import AvatarFrame from '../components/AvatarFrame';
+import ExportExcelModal from '../components/ExportExcelModal';
+import { MASTER_DEPARTMENTS } from '../constants';
+import BadgeMedal, { NameBadge, StreakFlame } from '../components/BadgeMedal';
 import {
   Calendar as CalendarIcon,
   Search,
@@ -12,7 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
-  Download,
+  FileSpreadsheet,
   Filter,
   MapPin,
   Building2,
@@ -71,6 +75,8 @@ export default function AttendanceMonitoring() {
   const [monthlyData, setMonthlyData] = useState(null);
   const [monthlyLoading, setMonthlyLoading] = useState(false);
   const [monthlyError, setMonthlyError] = useState('');
+  const [userBadges, setUserBadges] = useState(null);
+  const [exportFor, setExportFor] = useState(null);
 
   // Fetch all attendance for selected date
   const fetchAttendance = async (date) => {
@@ -125,6 +131,8 @@ export default function AttendanceMonitoring() {
     const initialMonth = getCurrentMonthStr();
     setModalMonth(initialMonth);
     fetchMonthlyLogs(userItem.user_id, initialMonth);
+    setUserBadges(null);
+    getUserBadges(userItem.user_id).then(setUserBadges).catch(() => setUserBadges(null));
   };
 
   // Close modal
@@ -228,61 +236,7 @@ export default function AttendanceMonitoring() {
     });
   }, [attendanceData, search, departmentFilter, statusFilter]);
 
-  // Export Daily to CSV
-  const handleExportDailyCSV = () => {
-    if (filteredData.length === 0) return;
-    const headers = ['NIP', 'Name', 'Department', 'Email', 'Date', 'Status', 'Check In', 'Check Out', 'Location'];
-    const rows = filteredData.map((item) => [
-      `"${item.nip || ''}"`,
-      `"${item.name || ''}"`,
-      `"${item.department || ''}"`,
-      `"${item.email || ''}"`,
-      `"${item.date || selectedDate}"`,
-      `"${item.status || ''}"`,
-      `"${formatTime(item.check_in_time)}"`,
-      `"${formatTime(item.check_out_time)}"`,
-      `"${(item.location || '').replace(/"/g, '""')}"`,
-    ]);
 
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Attendance_Daily_${selectedDate}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  // Export Monthly to CSV
-  const handleExportMonthlyCSV = () => {
-    if (!monthlyData || !monthlyData.days || monthlyData.days.length === 0) return;
-    const userName = monthlyData.user?.name || 'User';
-    const userNip = monthlyData.user?.nip || '';
-    const headers = ['Date', 'Day', 'Status', 'Check In', 'Check Out', 'Duration', 'Notes'];
-    const rows = monthlyData.days.map((d) => [
-      `"${d.date}"`,
-      `"${d.day_name}"`,
-      `"${d.status}"`,
-      `"${formatTime(d.check_in_time)}"`,
-      `"${formatTime(d.check_out_time)}"`,
-      `"${d.duration || '-'}"`,
-      `"${(d.location || d.notes || '').replace(/"/g, '""')}"`,
-    ]);
-
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Attendance_${userName.replace(/\s+/g, '_')}_${modalMonth}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -343,6 +297,15 @@ export default function AttendanceMonitoring() {
 
   return (
     <div className="space-y-6">
+      {exportFor && (
+        <ExportExcelModal
+          onClose={() => setExportFor(null)}
+          userId={exportFor.userId}
+          userName={exportFor.userName}
+          defaultFrom={exportFor.from}
+          defaultTo={exportFor.to}
+        />
+      )}
       {/* Header with Title, Role Access Badge & Date Selector */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
@@ -433,14 +396,13 @@ export default function AttendanceMonitoring() {
             <RotateCcw className={`w-4 h-4 ${loading ? 'animate-spin text-red-600' : ''}`} />
           </button>
 
-          {/* Export Daily CSV Button */}
+          {/* Export Excel (date range + summary sheet) */}
           <button
-            onClick={handleExportDailyCSV}
-            disabled={filteredData.length === 0}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl shadow-xs transition-colors disabled:opacity-50"
+            onClick={() => setExportFor({})}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-br from-emerald-500 to-emerald-700 hover:brightness-110 text-white text-sm font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
           >
-            <Download className="w-4 h-4" />
-            Export CSV
+            <FileSpreadsheet className="w-4 h-4" />
+            Export Excel
           </button>
         </div>
       </div>
@@ -614,20 +576,11 @@ export default function AttendanceMonitoring() {
                     {/* Employee Profile */}
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-700 font-bold flex items-center justify-center border border-slate-200 shrink-0 shadow-2xs overflow-hidden">
-                          {item.avatar_url ? (
-                            <img
-                              src={item.avatar_url}
-                              alt={item.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            item.name?.charAt(0) || 'U'
-                          )}
-                        </div>
+                        <AvatarFrame frame={item.avatar_frame} src={item.avatar_url} name={item.name} size={40} animate={false} />
                         <div className="min-w-0">
                           <p className="font-bold text-slate-900 leading-tight group-hover:text-red-600 transition-colors flex items-center gap-1.5">
                             {item.name}
+                            <NameBadge top={item.top_badge} />
                             <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 text-red-500 transition-opacity" />
                           </p>
                           <div className="flex items-center gap-2 mt-0.5">
@@ -780,6 +733,12 @@ export default function AttendanceMonitoring() {
 
               {/* Month Picker & Close */}
               <div className="flex items-center gap-2">
+                <Link
+                  to={`/map?user=${selectedUserModal.user_id || selectedUserModal.id}&month=${modalMonth}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors"
+                >
+                  <MapPin className="w-3.5 h-3.5" /> View on map
+                </Link>
                 {/* Month Navigator */}
                 <div className="flex items-center bg-white p-1 rounded-xl border border-slate-300 shadow-2xs">
                   <button
@@ -808,14 +767,22 @@ export default function AttendanceMonitoring() {
                   </button>
                 </div>
 
-                {/* Export Monthly CSV */}
+                {/* Export this employee to Excel */}
                 <button
-                  onClick={handleExportMonthlyCSV}
-                  disabled={monthlyLoading || !monthlyData}
-                  className="p-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl shadow-xs transition-colors"
-                  title="Export Month CSV"
+                  onClick={() => {
+                    const [y, m] = modalMonth.split('-').map(Number);
+                    const last = new Date(y, m, 0).getDate();
+                    setExportFor({
+                      userId: selectedUserModal.user_id || selectedUserModal.id,
+                      userName: selectedUserModal.name,
+                      from: `${modalMonth}-01`,
+                      to: `${modalMonth}-${String(last).padStart(2, '0')}`,
+                    });
+                  }}
+                  className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs transition-colors"
+                  title="Export to Excel"
                 >
-                  <Download className="w-4 h-4" />
+                  <FileSpreadsheet className="w-4 h-4" />
                 </button>
 
                 {/* Close Modal Button */}
@@ -831,6 +798,32 @@ export default function AttendanceMonitoring() {
 
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-6 flex-1">
+              {/* Achievements strip */}
+              {userBadges && (
+                <div className="aurora rounded-2xl p-4 text-white flex items-center gap-4 flex-wrap animate-fade-in">
+                  <span className="aurora-blob" />
+                  <div className="flex items-center gap-2.5 pr-4 border-r border-white/15">
+                    <StreakFlame size={30} lit={(userBadges.stats?.current_streak || 0) > 0} />
+                    <div>
+                      <p className="text-xl font-extrabold leading-none tabular-nums">{userBadges.stats?.current_streak ?? 0}</p>
+                      <p className="text-[10px] text-white/60 font-semibold mt-0.5">day streak</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xl font-extrabold leading-none tabular-nums">{userBadges.stats?.overtime_days ?? 0}</p>
+                    <p className="text-[10px] text-white/60 font-semibold mt-0.5">overtime days</p>
+                  </div>
+                  <div className="flex items-center gap-1 ml-auto">
+                    {(userBadges.badges || []).filter((b) => b.earned).length === 0 ? (
+                      <span className="text-xs text-white/60 font-semibold">No badges yet</span>
+                    ) : (
+                      (userBadges.badges || [])
+                        .filter((b) => b.earned)
+                        .map((b) => <BadgeMedal key={b.code} badge={b} size={48} showProgress={false} />)
+                    )}
+                  </div>
+                </div>
+              )}
               {/* Monthly KPI Summary Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                 <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">

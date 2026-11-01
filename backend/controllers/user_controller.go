@@ -51,7 +51,21 @@ func GetAllUsers(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": users, "master_departments": models.MasterDepartments})
+	type userWithBadge struct {
+		models.User
+		TopBadge *TopBadge `json:"top_badge"`
+	}
+	ids := make([]uint, len(users))
+	for i, u := range users {
+		ids[i] = u.ID
+	}
+	tops := topBadgesFor(ids)
+	out := make([]userWithBadge, len(users))
+	for i, u := range users {
+		out[i] = userWithBadge{User: u, TopBadge: tops[u.ID]}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": out, "master_departments": models.MasterDepartments})
 }
 
 func CreateUser(c *gin.Context) {

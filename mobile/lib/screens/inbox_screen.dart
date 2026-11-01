@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 
 class InboxScreen extends StatefulWidget {
   const InboxScreen({super.key});
@@ -79,8 +80,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
             'color': status == 'APPROVED'
                 ? const Color(0xFF10B981)
                 : (status == 'REJECTED'
-                    ? const Color(0xFFEF4444)
-                    : const Color(0xFFDC2626)),
+                    ? AppColors.red
+                    : AppColors.red),
           });
         }
       }
@@ -142,11 +143,11 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       case 'APPROVED':
         return const Color(0xFF10B981);
       case 'REJECTED':
-        return const Color(0xFFEF4444);
+        return AppColors.red;
       case 'READ':
-        return const Color(0xFF64748B);
+        return AppColors.textMuted;
       case 'INFO':
-        return const Color(0xFFDC2626);
+        return AppColors.red;
       case 'PENDING':
       default:
         return const Color(0xFFF59E0B);
@@ -166,7 +167,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Request from $applicant has been ${newStatus.toLowerCase()} in Database! Applicant notified.'),
-              backgroundColor: newStatus == 'APPROVED' ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+              backgroundColor: newStatus == 'APPROVED' ? const Color(0xFF10B981) : AppColors.red,
             ),
           );
         }
@@ -192,18 +193,18 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
     final approvalTabTitle = pendingApprovalCount > 0 ? 'Need My Approval ($pendingApprovalCount)' : 'Need My Approval';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        title: const Text('Inbox & Center', style: TextStyle(color: Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 18)),
-        backgroundColor: Colors.white,
+        title: Text('Inbox & Center', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: AppColors.surface,
         elevation: 0,
-        automaticallyImplyLeading: false,
+        automaticallyImplyLeading: true,
         bottom: TabBar(
           controller: _tabController,
-          labelColor: const Color(0xFFDC2626),
-          unselectedLabelColor: const Color(0xFF64748B),
+          labelColor: AppColors.red,
+          unselectedLabelColor: AppColors.textMuted,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-          indicatorColor: const Color(0xFFDC2626),
+          indicatorColor: AppColors.red,
           indicatorWeight: 3,
           tabs: [
             Tab(
@@ -230,7 +231,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFDC2626)))
+          ? Center(child: CircularProgressIndicator(color: AppColors.red))
           : TabBarView(
               controller: _tabController,
               children: [
@@ -250,19 +251,19 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                     children: [
                                       Text(
                                         '${_notifications.length} Total',
-                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textMuted),
                                       ),
                                       if (unreadNotifCount > 0) ...[
                                         const SizedBox(width: 6),
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFFDC2626).withValues(alpha: 0.12),
+                                            color: AppColors.red.withValues(alpha: 0.12),
                                             borderRadius: BorderRadius.circular(6),
                                           ),
                                           child: Text(
                                             '$unreadNotifCount unread',
-                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.red),
                                           ),
                                         ),
                                       ],
@@ -314,20 +315,20 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                         child: Row(
-                                          children: const [
-                                            Icon(Icons.done_all_rounded, size: 16, color: Color(0xFFDC2626)),
-                                            SizedBox(width: 4),
+                                          children: [
+                                            Icon(Icons.done_all_rounded, size: 16, color: AppColors.red),
+                                            const SizedBox(width: 4),
                                             Text(
                                               'Mark all as read',
-                                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
+                                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.red),
                                             ),
                                           ],
                                         ),
                                       ),
                                     )
                                   else
-                                    Row(
-                                      children: const [
+                                    const Row(
+                                      children: [
                                         Icon(Icons.done_all_rounded, size: 15, color: Color(0xFF10B981)),
                                         SizedBox(width: 4),
                                         Text(
@@ -354,9 +355,9 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                   final status = (item['status'] ?? 'INFO').toString();
                                   final isRead = item['is_read'] == true;
                                   final icon = (item['icon'] is IconData) ? (item['icon'] as IconData) : Icons.notifications_rounded;
-                                  final iconColor = (item['color'] is Color) ? (item['color'] as Color) : const Color(0xFFDC2626);
+                                  final iconColor = (item['color'] is Color) ? (item['color'] as Color) : AppColors.red;
 
-                                  final statusColor = isRead ? const Color(0xFF94A3B8) : _getStatusColor(status);
+                                  final statusColor = isRead ? AppColors.textFaint : _getStatusColor(status);
 
                                   return TweenAnimationBuilder<double>(
                                     tween: Tween(begin: 0.0, end: 1.0),
@@ -395,14 +396,14 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                           color: isRead ? const Color(0xFFFAFAFA) : Colors.white,
                                           borderRadius: BorderRadius.circular(16),
                                           border: Border.all(
-                                            color: isRead ? const Color(0xFFE2E8F0) : const Color(0xFFDC2626).withValues(alpha: 0.35),
+                                            color: isRead ? AppColors.line : AppColors.red.withValues(alpha: 0.35),
                                             width: isRead ? 1.0 : 1.2,
                                           ),
                                           boxShadow: isRead
                                               ? null
                                               : [
                                                   BoxShadow(
-                                                    color: const Color(0xFFDC2626).withValues(alpha: 0.05),
+                                                    color: AppColors.red.withValues(alpha: 0.05),
                                                     blurRadius: 8,
                                                     offset: const Offset(0, 2),
                                                   ),
@@ -415,13 +416,13 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                               padding: const EdgeInsets.all(10),
                                               decoration: BoxDecoration(
                                                 color: isRead
-                                                    ? const Color(0xFFE2E8F0)
+                                                    ? AppColors.line
                                                     : iconColor.withValues(alpha: 0.12),
                                                 borderRadius: BorderRadius.circular(12),
                                               ),
                                               child: Icon(
                                                 icon,
-                                                color: isRead ? const Color(0xFF64748B) : iconColor,
+                                                color: isRead ? AppColors.textMuted : iconColor,
                                                 size: 22,
                                               ),
                                             ),
@@ -441,8 +442,8 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                                                 width: 7,
                                                                 height: 7,
                                                                 margin: const EdgeInsets.only(right: 6),
-                                                                decoration: const BoxDecoration(
-                                                                  color: Color(0xFFDC2626),
+                                                                decoration: BoxDecoration(
+                                                                  color: AppColors.red,
                                                                   shape: BoxShape.circle,
                                                                 ),
                                                               ),
@@ -453,7 +454,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                                                 style: TextStyle(
                                                                   fontSize: 14,
                                                                   fontWeight: isRead ? FontWeight.w600 : FontWeight.bold,
-                                                                  color: isRead ? const Color(0xFF475569) : const Color(0xFF0F172A),
+                                                                  color: isRead ? AppColors.textMuted : AppColors.text,
                                                                 ),
                                                                 maxLines: 1,
                                                                 overflow: TextOverflow.ellipsis,
@@ -480,7 +481,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                                     message,
                                                     style: TextStyle(
                                                       fontSize: 12,
-                                                      color: isRead ? const Color(0xFF64748B) : const Color(0xFF334155),
+                                                      color: isRead ? AppColors.textMuted : AppColors.text,
                                                       height: 1.4,
                                                     ),
                                                   ),
@@ -490,21 +491,21 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                                     children: [
                                                       Text(
                                                         date,
-                                                        style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                                                        style: TextStyle(fontSize: 11, color: AppColors.textFaint),
                                                       ),
                                                       if (!isRead)
-                                                        const Text(
+                                                        Text(
                                                           'Tap to mark read',
-                                                          style: TextStyle(fontSize: 10, color: Color(0xFFDC2626), fontWeight: FontWeight.w600),
+                                                          style: TextStyle(fontSize: 10, color: AppColors.red, fontWeight: FontWeight.w600),
                                                         )
                                                       else
                                                         Row(
-                                                          children: const [
-                                                            Icon(Icons.done_all_rounded, size: 12, color: Color(0xFF94A3B8)),
-                                                            SizedBox(width: 3),
+                                                          children: [
+                                                            Icon(Icons.done_all_rounded, size: 12, color: AppColors.textFaint),
+                                                            const SizedBox(width: 3),
                                                             Text(
                                                               'Read',
-                                                              style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                                                              style: TextStyle(fontSize: 10, color: AppColors.textFaint, fontWeight: FontWeight.w500),
                                                             ),
                                                           ],
                                                         ),
@@ -547,7 +548,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                         ),
                       ),
                     ),
-                    const Divider(height: 1, color: Color(0xFFE2E8F0)),
+                    Divider(height: 1, color: AppColors.line),
 
                     // Approval List View
                     Expanded(
@@ -574,7 +575,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                   final category = (item['category'] ?? 'LEAVE').toString();
                                   final isPending = status == 'PENDING';
 
-                                  Color categoryColor = const Color(0xFFDC2626);
+                                  Color categoryColor = AppColors.red;
                                   IconData categoryIcon = Icons.assignment_rounded;
 
                                   if (category == 'OVERTIME') {
@@ -584,7 +585,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                     categoryColor = const Color(0xFFD97706);
                                     categoryIcon = Icons.edit_calendar_rounded;
                                   } else if (category == 'LEAVE') {
-                                    categoryColor = const Color(0xFFDC2626);
+                                    categoryColor = AppColors.red;
                                     categoryIcon = Icons.beach_access_rounded;
                                   }
 
@@ -602,10 +603,9 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
 
                                   return Container(
                                     padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white,
+                                    decoration: BoxDecoration(color: AppColors.surface,
                                       borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                      border: Border.all(color: AppColors.line),
                                     ),
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -631,11 +631,11 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                                 children: [
                                                   Text(
                                                     name,
-                                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.text),
                                                   ),
                                                   Text(
                                                     dept,
-                                                    style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                                                    style: TextStyle(fontSize: 11, color: AppColors.textMuted),
                                                   ),
                                                 ],
                                               ),
@@ -654,7 +654,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                           ],
                                         ),
                                         const SizedBox(height: 12),
-                                        const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                                        Divider(height: 1, color: AppColors.line),
                                         const SizedBox(height: 12),
 
                                         // Request Details
@@ -671,12 +671,12 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                         const SizedBox(height: 4),
                                         Text(
                                           period,
-                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)),
+                                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text),
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
                                           'Reason / Notes: $reason',
-                                          style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                          style: TextStyle(fontSize: 12, color: AppColors.textMuted),
                                         ),
 
                                         if (isPending) ...[
@@ -688,7 +688,7 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
                                                 child: OutlinedButton.icon(
                                                   onPressed: () => _handleApprovalAction(item, 'REJECTED'),
                                                   style: OutlinedButton.styleFrom(
-                                                    foregroundColor: const Color(0xFFEF4444),
+                                                    foregroundColor: AppColors.red,
                                                     side: const BorderSide(color: Color(0xFFFCA5A5)),
                                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                                     padding: const EdgeInsets.symmetric(vertical: 10),
@@ -734,14 +734,14 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
       label: Text(
         label,
         style: TextStyle(
-          color: isSelected ? Colors.white : const Color(0xFF475569),
+          color: isSelected ? Colors.white : AppColors.textMuted,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           fontSize: 12,
         ),
       ),
       selected: isSelected,
-      selectedColor: const Color(0xFFDC2626),
-      backgroundColor: const Color(0xFFF1F5F9),
+      selectedColor: AppColors.red,
+      backgroundColor: AppColors.line,
       showCheckmark: false,
       onSelected: (selected) {
         if (selected) {
@@ -760,12 +760,12 @@ class _InboxScreenState extends State<InboxScreen> with SingleTickerProviderStat
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(iconData, size: 48, color: const Color(0xFFCBD5E1)),
+            Icon(iconData, size: 48, color: AppColors.line),
             const SizedBox(height: 12),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14, color: Color(0xFF64748B), height: 1.4),
+              style: TextStyle(fontSize: 14, color: AppColors.textMuted, height: 1.4),
             ),
           ],
         ),

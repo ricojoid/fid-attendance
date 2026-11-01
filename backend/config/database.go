@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/glebarez/sqlite"
 	"github.com/tmmin-fid/fid-attendance-system/backend/models"
@@ -74,14 +75,49 @@ func InitDB() *gorm.DB {
 	} else {
 		dbName := getEnvOrDefault("DB_NAME", "attendance.db")
 		log.Printf("Connecting to SQLite database: %s...", dbName)
-		dialector = sqlite.Open(dbName)
+		dsn := dbName
+		if !strings.Contains(dsn, "?") {
+			// Per-connection pragmas: WAL lets readers run alongside the writer,
+			// busy_timeout avoids "database is locked" under concurrent writes.
+			dsn += "?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)"
+		}
+		dialector = sqlite.Open(dsn)
+	}
+
+	// Logging every SQL statement at Info level is very expensive under load.
+	// Default to Warn (slow queries + errors); set DB_LOG=info to debug.
+	logLevel := logger.Warn
+	switch strings.ToLower(os.Getenv("DB_LOG")) {
+	case "info":
+		logLevel = logger.Info
+	case "silent":
+		logLevel = logger.Silent
+	case "error":
+		logLevel = logger.Error
 	}
 
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: logger.New(log.New(os.Stdout, "", log.LstdFlags), logger.Config{
+			SlowThreshold:             200 * time.Millisecond,
+			LogLevel:                  logLevel,
+			IgnoreRecordNotFoundError: true, // "not checked in yet" is normal, not a warning
+		}),
+		PrepareStmt:            true, // cache prepared statements
+		SkipDefaultTransaction: true, // single writes don't need an implicit tx
 	})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
+	if sqlDB, err := db.DB(); err == nil {
+		if dbDriver == "postgres" {
+			sqlDB.SetMaxOpenConns(25)
+			sqlDB.SetMaxIdleConns(10)
+			sqlDB.SetConnMaxLifetime(30 * time.Minute)
+		} else {
+			sqlDB.SetMaxOpenConns(8)
+			sqlDB.SetMaxIdleConns(8)
+		}
 	}
 
 	log.Println("Running AutoMigrations...")
@@ -95,12 +131,18 @@ func InitDB() *gorm.DB {
 		&models.Announcement{},
 		&models.LogHeader{},
 		&models.LogDetail{},
+		&models.UserBadge{},
+		&models.UserFrame{},
+		&models.Post{},
+		&models.PostLike{},
+		&models.PostComment{},
 	)
 	if err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
 	DB = db
+	backfillAttendanceSource(db)
 	seedInitialData(db)
 	return db
 }
@@ -225,4 +267,16 @@ func seedInitialData(db *gorm.DB) {
 			db.Create(&a)
 		}
 	}
+}
+
+// backfillAttendanceSource tags rows written before the source/is_corrected
+// columns existed. Approved corrections always prefixed the address with
+// "Approved Correction:"; rows that also have no GPS fix were created by the
+// correction itself (no live check-in), the rest were live but later edited.
+func backfillAttendanceSource(db *gorm.DB) {
+	db.Exec(`UPDATE "TB_R_ATTENDANCE" SET source = 'CORRECTION', is_corrected = ?
+		WHERE check_in_address LIKE 'Approved Correction:%' AND check_in_lat = 0 AND check_in_long = 0 AND (source IS NULL OR source = '' OR source = 'LIVE') AND is_corrected = ?`, true, false)
+	db.Exec(`UPDATE "TB_R_ATTENDANCE" SET is_corrected = ?
+		WHERE check_in_address LIKE 'Approved Correction:%' AND is_corrected = ?`, true, false)
+	db.Exec(`UPDATE "TB_R_ATTENDANCE" SET source = 'LIVE' WHERE source IS NULL OR source = ''`)
 }

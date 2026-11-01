@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
+import '../widgets/approver_banner.dart';
+import '../theme/app_theme.dart';
 
 class LeaveRequestScreen extends StatefulWidget {
   const LeaveRequestScreen({super.key});
@@ -98,15 +100,15 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        title: const Text('Leave Application Form', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
+        title: Text('Leave Application Form', style: TextStyle(color: AppColors.text, fontWeight: FontWeight.bold)),
+        backgroundColor: AppColors.surface,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        iconTheme: IconThemeData(color: AppColors.text),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFDC2626)))
+          ? Center(child: CircularProgressIndicator(color: AppColors.red))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Form(
@@ -114,13 +116,14 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const ApproverBanner(),
                     const Text('Leave Type', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<int>(
                       value: _selectedLeaveTypeId,
                       decoration: InputDecoration(
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: AppColors.surface,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       items: _leaveTypes.map<DropdownMenuItem<int>>((type) {
@@ -145,10 +148,9 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> {
                                 onTap: () => _selectDate(context, true),
                                 child: Container(
                                   padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
+                                  decoration: BoxDecoration(color: AppColors.surface,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                    border: Border.all(color: AppColors.line),
                                   ),
                                   child: Text(
                                     _startDate == null ? 'Select Date' : DateFormat('dd MMM yyyy').format(_startDate!),
@@ -170,10 +172,9 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> {
                                 onTap: () => _selectDate(context, false),
                                 child: Container(
                                   padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
+                                  decoration: BoxDecoration(color: AppColors.surface,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                    border: Border.all(color: AppColors.line),
                                   ),
                                   child: Text(
                                     _endDate == null ? 'Select Date' : DateFormat('dd MMM yyyy').format(_endDate!),
@@ -197,7 +198,7 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> {
                       decoration: InputDecoration(
                         hintText: 'Enter reason for your leave request...',
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: AppColors.surface,
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
@@ -209,8 +210,8 @@ class _LeaveRequestScreenState extends State<LeaveRequestScreen> {
                       child: ElevatedButton(
                         onPressed: _isSubmitting ? null : _handleSubmit,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFDC2626),
-                          disabledBackgroundColor: const Color(0xFFDC2626).withOpacity(0.5),
+                          backgroundColor: AppColors.red,
+                          disabledBackgroundColor: AppColors.red.withOpacity(0.5),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           elevation: 0,
                         ),

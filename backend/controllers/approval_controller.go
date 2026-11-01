@@ -9,129 +9,118 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tmmin-fid/fid-attendance-system/backend/config"
 	"github.com/tmmin-fid/fid-attendance-system/backend/models"
+	"gorm.io/gorm"
 )
 
 type ProcessApprovalRequest struct {
-	Type   string `json:"type" binding:"required"` // LEAVE, CORRECTION
+	Type   string `json:"type" binding:"required"` // LEAVE, CORRECTION / ATTENDANCE
 	ID     uint   `json:"id" binding:"required"`
 	Status string `json:"status" binding:"required"` // APPROVED, REJECTED
 }
 
-// GetPendingApprovals returns requests where the submitter's approver maps exactly
-// to the logged-in user, based on approver_name → user lookup in DB.
-// SUPER_ADMIN sees all pending requests.
+func approverSummary(u *models.User) gin.H {
+	if u == nil {
+		return nil
+	}
+	return gin.H{"id": u.ID, "name": u.Name, "role": u.Role, "department": u.Department}
+}
+
+// GetPendingApprovals returns the pending requests this user is responsible for
+// (see approver.go for the routing rules). SUPER_ADMIN sees everything.
 func GetPendingApprovals(c *gin.Context) {
 	userID := c.MustGet("userID").(uint)
 
-	var currentUser models.User
-	if err := config.DB.First(&currentUser, userID).Error; err != nil {
+	dir := loadApproverDirectory()
+	me := dir.byID[userID]
+	if me == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
 
-	isSuperAdmin := strings.ToUpper(currentUser.Role) == "SUPER_ADMIN"
-
-	// Fetch leave requests with submitter user preloaded
 	var leaves []models.LeaveRequest
 	config.DB.Preload("User").Preload("LeaveType").Where("status = ?", "PENDING").Order("id desc").Find(&leaves)
 
-	// Fetch correction requests with submitter user preloaded
 	var corrections []models.AttendanceCorrection
 	config.DB.Preload("User").Where("status = ?", "PENDING").Order("id desc").Find(&corrections)
 
-	var results []gin.H
+	results := []gin.H{}
 
-	// Filter leave requests: match by looking up approver_name as exact user in DB
 	for _, l := range leaves {
-		if l.User == nil {
+		if l.User == nil || !dir.CanProcess(me, l.User) {
 			continue
 		}
-		approverName := strings.TrimSpace(l.User.ApproverName)
-		if approverName == "" {
-			continue
+		typeName := "Leave Request"
+		if l.LeaveType != nil {
+			typeName = l.LeaveType.Name
 		}
-
-		// Lookup the approver user record by name (exact, case-insensitive)
-		var approverUser models.User
-		if err := config.DB.Where("LOWER(name) = LOWER(?)", approverName).First(&approverUser).Error; err != nil {
-			// approver_name doesn't match any registered user — skip
-			continue
-		}
-
-		// Show this request only to the matched approver (or Super Admin)
-		if approverUser.ID == userID || isSuperAdmin {
-			typeName := "Leave Request"
-			if l.LeaveType != nil {
-				typeName = l.LeaveType.Name
-			}
-			results = append(results, gin.H{
-				"id":               l.ID,
-				"category":         "LEAVE",
-				"applicant_name":   l.User.Name,
-				"applicant_id":     l.UserID,
-				"applicant_avatar": l.User.AvatarURL,
-				"department":       l.User.Department,
-				"request_type":     typeName,
-				"period":           fmt.Sprintf("%s to %s", l.StartDate, l.EndDate),
-				"reason":           l.Reason,
-				"status":           l.Status,
-				"created_at":       l.CreatedAt.Format("2006-01-02 15:04"),
-			})
-		}
+		results = append(results, gin.H{
+			"id":               l.ID,
+			"category":         "LEAVE",
+			"applicant_name":   l.User.Name,
+			"applicant_id":     l.UserID,
+			"applicant_avatar": l.User.AvatarURL,
+			"department":       l.User.Department,
+			"request_type":     typeName,
+			"period":           fmt.Sprintf("%s to %s", l.StartDate, l.EndDate),
+			"start_date":       l.StartDate,
+			"end_date":         l.EndDate,
+			"reason":           l.Reason,
+			"status":           l.Status,
+			"approver":         approverSummary(dir.Resolve(l.User)),
+			"created_at":       l.CreatedAt.Format("2006-01-02 15:04"),
+		})
 	}
 
-	// Filter correction requests: same exact-match logic
 	for _, cr := range corrections {
-		if cr.User == nil {
+		if cr.User == nil || !dir.CanProcess(me, cr.User) {
 			continue
 		}
-		approverName := strings.TrimSpace(cr.User.ApproverName)
-		if approverName == "" {
-			continue
+		periodStr := fmt.Sprintf("Date: %s", cr.AttendanceDate)
+		if cr.CorrectedCheckIn != nil && cr.CorrectedCheckOut != nil {
+			periodStr = fmt.Sprintf("Date: %s (%s - %s)", cr.AttendanceDate, cr.CorrectedCheckIn.Format("15:04"), cr.CorrectedCheckOut.Format("15:04"))
+		} else if cr.CorrectedCheckIn != nil {
+			periodStr = fmt.Sprintf("Date: %s (In: %s)", cr.AttendanceDate, cr.CorrectedCheckIn.Format("15:04"))
 		}
 
-		var approverUser models.User
-		if err := config.DB.Where("LOWER(name) = LOWER(?)", approverName).First(&approverUser).Error; err != nil {
-			continue
-		}
-
-		if approverUser.ID == userID || isSuperAdmin {
-			periodStr := fmt.Sprintf("Date: %s", cr.AttendanceDate)
-			if cr.CorrectedCheckIn != nil && cr.CorrectedCheckOut != nil {
-				periodStr = fmt.Sprintf("Date: %s (%s - %s)", cr.AttendanceDate, cr.CorrectedCheckIn.Format("15:04"), cr.CorrectedCheckOut.Format("15:04"))
-			} else if cr.CorrectedCheckIn != nil {
-				periodStr = fmt.Sprintf("Date: %s (In: %s)", cr.AttendanceDate, cr.CorrectedCheckIn.Format("15:04"))
-			}
-
-			results = append(results, gin.H{
-				"id":               cr.ID,
-				"category":         "ATTENDANCE",
-				"applicant_name":   cr.User.Name,
-				"applicant_id":     cr.UserID,
-				"applicant_avatar": cr.User.AvatarURL,
-				"department":       cr.User.Department,
-				"request_type":     "Attendance Correction",
-				"period":           periodStr,
-				"reason":           cr.Reason,
-				"status":           cr.Status,
-				"created_at":       cr.CreatedAt.Format("2006-01-02 15:04"),
-			})
-		}
-	}
-
-	if results == nil {
-		results = []gin.H{}
+		results = append(results, gin.H{
+			"id":               cr.ID,
+			"category":         "ATTENDANCE",
+			"applicant_name":   cr.User.Name,
+			"applicant_id":     cr.UserID,
+			"applicant_avatar": cr.User.AvatarURL,
+			"department":       cr.User.Department,
+			"request_type":     "Attendance Correction",
+			"period":           periodStr,
+			"reason":           cr.Reason,
+			"status":           cr.Status,
+			"approver":         approverSummary(dir.Resolve(cr.User)),
+			"created_at":       cr.CreatedAt.Format("2006-01-02 15:04"),
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": results})
 }
 
-// ProcessApproval updates DB status & inserts a Notification record for the applicant user
+// GetMyApprover tells the client who will receive this user's requests,
+// so the UI can show "This request will be sent to …" before submitting.
+func GetMyApprover(c *gin.Context) {
+	userID := c.MustGet("userID").(uint)
+	dir := loadApproverDirectory()
+	me := dir.byID[userID]
+	if me == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"approver": approverSummary(dir.Resolve(me))})
+}
+
+func isLate(t *time.Time) bool {
+	return t != nil && (t.Hour() > 8 || (t.Hour() == 8 && t.Minute() > 30))
+}
+
+// ProcessApproval approves/rejects a request and notifies the applicant.
 func ProcessApproval(c *gin.Context) {
 	approverID := c.MustGet("userID").(uint)
-
-	var approver models.User
-	config.DB.First(&approver, approverID)
 
 	var req ProcessApprovalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -139,12 +128,23 @@ func ProcessApproval(c *gin.Context) {
 		return
 	}
 
-	reqTypeUpper := strings.ToUpper(req.Type)
-	newStatusUpper := strings.ToUpper(req.Status)
+	reqTypeUpper := strings.ToUpper(strings.TrimSpace(req.Type))
+	newStatus := strings.ToUpper(strings.TrimSpace(req.Status))
+	if newStatus != "APPROVED" && newStatus != "REJECTED" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Status must be APPROVED or REJECTED"})
+		return
+	}
+
+	dir := loadApproverDirectory()
+	approver := dir.byID[approverID]
+	if approver == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not found"})
+		return
+	}
 
 	var applicantID uint
-	var reqTitle string
-	var reqDetails string
+	var reqTitle, reqDetails string
+	errAlreadyProcessed := fmt.Errorf("already processed")
 
 	if reqTypeUpper == "LEAVE" {
 		var leave models.LeaveRequest
@@ -152,59 +152,59 @@ func ProcessApproval(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Leave request not found"})
 			return
 		}
-
-		// Verify the approver is authorized to process this request
-		if leave.User != nil {
-			mappedApprover := strings.TrimSpace(strings.ToLower(leave.User.ApproverName))
-			myName := strings.TrimSpace(strings.ToLower(approver.Name))
-			isSuperAdmin := strings.ToUpper(approver.Role) == "SUPER_ADMIN"
-			if !isSuperAdmin && !strings.Contains(mappedApprover, myName) {
-				c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to approve this request"})
-				return
-			}
+		if !dir.CanProcess(approver, leave.User) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You are not the approver for this request"})
+			return
 		}
-
-		leave.Status = newStatusUpper
-		config.DB.Save(&leave)
+		// Conditional update: only a PENDING request can change state. This also
+		// makes double-clicks / two approvers racing each other safe.
+		res := config.DB.Model(&models.LeaveRequest{}).
+			Where("id = ? AND status = ?", leave.ID, "PENDING").
+			Update("status", newStatus)
+		if res.Error != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update leave request"})
+			return
+		}
+		if res.RowsAffected == 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "This request has already been processed"})
+			return
+		}
 
 		applicantID = leave.UserID
 		reqTitle = "Leave Request Status"
-		reqDetails = fmt.Sprintf("Your leave request for %s to %s has been %s by %s.", leave.StartDate, leave.EndDate, newStatusUpper, approver.Name)
+		reqDetails = fmt.Sprintf("Your leave request for %s to %s has been %s by %s.", leave.StartDate, leave.EndDate, newStatus, approver.Name)
 	} else {
 		var corr models.AttendanceCorrection
 		if err := config.DB.Preload("User").First(&corr, req.ID).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Attendance correction request not found"})
 			return
 		}
-
-		// Verify the approver is authorized to process this request
-		if corr.User != nil {
-			mappedApprover := strings.TrimSpace(strings.ToLower(corr.User.ApproverName))
-			myName := strings.TrimSpace(strings.ToLower(approver.Name))
-			isSuperAdmin := strings.ToUpper(approver.Role) == "SUPER_ADMIN"
-			if !isSuperAdmin && !strings.Contains(mappedApprover, myName) {
-				c.JSON(http.StatusForbidden, gin.H{"error": "You are not authorized to approve this request"})
-				return
-			}
+		if !dir.CanProcess(approver, corr.User) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "You are not the approver for this request"})
+			return
 		}
 
-		corr.Status = newStatusUpper
-		config.DB.Save(&corr)
+		err := config.DB.Transaction(func(tx *gorm.DB) error {
+			res := tx.Model(&models.AttendanceCorrection{}).
+				Where("id = ? AND status = ?", corr.ID, "PENDING").
+				Update("status", newStatus)
+			if res.Error != nil {
+				return res.Error
+			}
+			if res.RowsAffected == 0 {
+				return errAlreadyProcessed
+			}
+			if newStatus != "APPROVED" {
+				return nil
+			}
 
-		applicantID = corr.UserID
-		reqTitle = "Attendance Correction Status"
-		reqDetails = fmt.Sprintf("Your attendance correction request for %s has been %s by %s.", corr.AttendanceDate, newStatusUpper, approver.Name)
-
-		if newStatusUpper == "APPROVED" {
-			// Persist approved correction into TB_R_ATTENDANCE table
+			// Persist the approved correction into TB_R_ATTENDANCE.
 			var att models.Attendance
-			err := config.DB.Where("user_id = ? AND date = ?", corr.UserID, corr.AttendanceDate).First(&att).Error
-			if err != nil {
+			if err := tx.Where("user_id = ? AND date = ?", corr.UserID, corr.AttendanceDate).First(&att).Error; err != nil {
 				status := "PRESENT"
-				if corr.CorrectedCheckIn != nil && (corr.CorrectedCheckIn.Hour() > 8 || (corr.CorrectedCheckIn.Hour() == 8 && corr.CorrectedCheckIn.Minute() > 30)) {
+				if isLate(corr.CorrectedCheckIn) {
 					status = "LATE"
 				}
-
 				att = models.Attendance{
 					UserID:         corr.UserID,
 					Date:           corr.AttendanceDate,
@@ -212,39 +212,55 @@ func ProcessApproval(c *gin.Context) {
 					CheckOutTime:   corr.CorrectedCheckOut,
 					CheckInAddress: "Approved Correction: " + corr.Reason,
 					Status:         status,
+					Source:         "CORRECTION", // not a live check-in → excluded from streaks
+					IsCorrected:    true,
 				}
-				config.DB.Create(&att)
-			} else {
-				if corr.CorrectedCheckIn != nil {
-					att.CheckInTime = corr.CorrectedCheckIn
-					if corr.CorrectedCheckIn.Hour() > 8 || (corr.CorrectedCheckIn.Hour() == 8 && corr.CorrectedCheckIn.Minute() > 30) {
-						att.Status = "LATE"
-					} else {
-						att.Status = "PRESENT"
-					}
-				}
-				if corr.CorrectedCheckOut != nil {
-					att.CheckOutTime = corr.CorrectedCheckOut
-				}
-				att.CheckInAddress = "Approved Correction: " + corr.Reason
-				config.DB.Save(&att)
+				return tx.Create(&att).Error
 			}
+			if corr.CorrectedCheckIn != nil {
+				att.CheckInTime = corr.CorrectedCheckIn
+				if isLate(corr.CorrectedCheckIn) {
+					att.Status = "LATE"
+				} else {
+					att.Status = "PRESENT"
+				}
+			}
+			if corr.CorrectedCheckOut != nil {
+				att.CheckOutTime = corr.CorrectedCheckOut
+			}
+			att.CheckInAddress = "Approved Correction: " + corr.Reason
+			att.IsCorrected = true
+			return tx.Save(&att).Error
+		})
+		if err == errAlreadyProcessed {
+			c.JSON(http.StatusConflict, gin.H{"error": "This request has already been processed"})
+			return
 		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process correction request"})
+			return
+		}
+		if newStatus == "APPROVED" {
+			syncBadgesAsync(corr.UserID)
+		}
+
+		applicantID = corr.UserID
+		reqTitle = "Attendance Correction Status"
+		reqDetails = fmt.Sprintf("Your attendance correction request for %s has been %s by %s.", corr.AttendanceDate, newStatus, approver.Name)
 	}
 
-	// Insert Notification into DB for the Applicant User
 	notification := models.Notification{
 		UserID:    applicantID,
-		Title:     fmt.Sprintf("%s: %s", reqTitle, newStatusUpper),
+		Title:     fmt.Sprintf("%s: %s", reqTitle, newStatus),
 		Message:   reqDetails,
 		Type:      reqTypeUpper,
-		Status:    newStatusUpper,
+		Status:    newStatus,
 		CreatedAt: time.Now(),
 	}
 	config.DB.Create(&notification)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":      fmt.Sprintf("Request successfully %s", newStatusUpper),
+		"message":      fmt.Sprintf("Request successfully %s", newStatus),
 		"notification": notification,
 	})
 }

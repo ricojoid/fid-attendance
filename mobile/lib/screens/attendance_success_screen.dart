@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../theme/app_theme.dart';
 
 class AttendanceSuccessScreen extends StatefulWidget {
   final bool isCheckIn;
@@ -111,12 +112,12 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
     final typeText = widget.isCheckIn ? 'Check-In' : 'Check-Out';
 
     // Check-In = Emerald Green, Check-Out = Crimson Red
-    final primaryColor = widget.isCheckIn ? const Color(0xFF10B981) : const Color(0xFFDC2626);
-    final primaryDark = widget.isCheckIn ? const Color(0xFF047857) : const Color(0xFF991B1B);
-    final primaryLight = widget.isCheckIn ? const Color(0xFF34D399) : const Color(0xFFEF4444);
+    final primaryColor = widget.isCheckIn ? const Color(0xFF10B981) : AppColors.red;
+    final primaryDark = widget.isCheckIn ? const Color(0xFF047857) : AppColors.redDeep;
+    final primaryLight = widget.isCheckIn ? const Color(0xFF34D399) : AppColors.red;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: AppColors.bg,
       body: Stack(
         children: [
           // Ambient Background Glow Orbs & Festive Ornaments
@@ -243,7 +244,7 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
                                     offset: const Offset(0, 10),
                                   ),
                                   BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.12),
+                                    color: AppColors.text.withValues(alpha: 0.12),
                                     blurRadius: 10,
                                     offset: const Offset(0, 4),
                                   ),
@@ -318,10 +319,10 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
                             // Main Title
                             Text(
                               '$typeText Successful!',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 26,
                                 fontWeight: FontWeight.w900,
-                                color: Color(0xFF0F172A),
+                                color: AppColors.text,
                                 letterSpacing: -0.5,
                               ),
                             ),
@@ -329,12 +330,12 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
                             const SizedBox(height: 6),
 
                             // Subtitle
-                            const Text(
+                            Text(
                               'Your attendance has been verified and safely recorded in the system.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Color(0xFF64748B),
+                                color: AppColors.textMuted,
                                 height: 1.4,
                               ),
                             ),
@@ -344,13 +345,12 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
                             // Detail Information Card
                             Container(
                               width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
+                              decoration: BoxDecoration(color: AppColors.surface,
                                 borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                border: Border.all(color: AppColors.line),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF0F172A).withValues(alpha: 0.04),
+                                    color: AppColors.text.withValues(alpha: 0.04),
                                     blurRadius: 18,
                                     offset: const Offset(0, 8),
                                   ),
@@ -362,10 +362,10 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFF8FAFC),
+                                      color: AppColors.bg,
                                       borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                                      border: const Border(
-                                        bottom: BorderSide(color: Color(0xFFF1F5F9)),
+                                      border: Border(
+                                        bottom: BorderSide(color: AppColors.line),
                                       ),
                                     ),
                                     child: Row(
@@ -380,16 +380,16 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
                                                 fontSize: 10,
                                                 fontWeight: FontWeight.w800,
                                                 letterSpacing: 1.0,
-                                                color: const Color(0xFF94A3B8),
+                                                color: AppColors.textFaint,
                                               ),
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
                                               timeStr,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontSize: 22,
                                                 fontWeight: FontWeight.w900,
-                                                color: Color(0xFF0F172A),
+                                                color: AppColors.text,
                                                 letterSpacing: 0.5,
                                               ),
                                             ),
@@ -426,7 +426,7 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
                                           value: dateStr,
                                           iconColor: const Color(0xFF3B82F6),
                                         ),
-                                        const Divider(height: 24, color: Color(0xFFF1F5F9)),
+                                        Divider(height: 24, color: AppColors.line),
 
                                         // Status / Type Row
                                         _buildDetailRow(
@@ -437,7 +437,7 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
                                           value: '$typeText (Verified)',
                                           iconColor: primaryColor,
                                         ),
-                                        const Divider(height: 24, color: Color(0xFFF1F5F9)),
+                                        Divider(height: 24, color: AppColors.line),
 
                                         // Location Row
                                         _buildDetailRow(
@@ -446,12 +446,12 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
                                           value: widget.address.isNotEmpty
                                               ? widget.address
                                               : 'Current GPS Coordinates',
-                                          iconColor: const Color(0xFFDC2626),
+                                          iconColor: AppColors.red,
                                         ),
 
                                         // Optional Notes Row
                                         if (widget.notes != null && widget.notes!.isNotEmpty) ...[
-                                          const Divider(height: 24, color: Color(0xFFF1F5F9)),
+                                          Divider(height: 24, color: AppColors.line),
                                           _buildDetailRow(
                                             icon: Icons.notes_rounded,
                                             label: 'Attendance Note',
@@ -462,24 +462,24 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
 
                                         // Optional Selfie Photo Row
                                         if (widget.imageFile != null) ...[
-                                          const Divider(height: 24, color: Color(0xFFF1F5F9)),
+                                          Divider(height: 24, color: AppColors.line),
                                           Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              const Row(
+                                              Row(
                                                 children: [
                                                   Icon(
                                                     Icons.camera_alt_rounded,
                                                     size: 16,
-                                                    color: Color(0xFF64748B),
+                                                    color: AppColors.textMuted,
                                                   ),
-                                                  SizedBox(width: 8),
+                                                  const SizedBox(width: 8),
                                                   Text(
                                                     'Attached Photo Verification',
                                                     style: TextStyle(
                                                       fontSize: 12,
                                                       fontWeight: FontWeight.bold,
-                                                      color: Color(0xFF64748B),
+                                                      color: AppColors.textMuted,
                                                     ),
                                                   ),
                                                 ],
@@ -644,19 +644,19 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
             children: [
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: Color(0xFF64748B),
+                  color: AppColors.textMuted,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 value,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E293B),
+                  color: AppColors.text,
                   height: 1.3,
                 ),
               ),
@@ -675,16 +675,16 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
       return Container(
         height: 150,
         width: double.infinity,
-        color: const Color(0xFFF1F5F9),
-        child: const Column(
+        color: AppColors.line,
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 36),
-            SizedBox(height: 6),
+            const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 36),
+            const SizedBox(height: 6),
             Text(
               'Selfie Photo Attached',
               style: TextStyle(
-                color: Color(0xFF475569),
+                color: AppColors.textMuted,
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
               ),
@@ -699,8 +699,8 @@ class _AttendanceSuccessScreenState extends State<AttendanceSuccessScreen>
       return Container(
         height: 150,
         width: double.infinity,
-        color: const Color(0xFFF1F5F9),
-        child: const Icon(Icons.photo, size: 48, color: Color(0xFF94A3B8)),
+        color: AppColors.line,
+        child: Icon(Icons.photo, size: 48, color: AppColors.textFaint),
       );
     }
   }
@@ -711,7 +711,7 @@ class _SuccessWavePainter extends CustomPainter {
   final double progress;
   final Color color;
 
-  _SuccessWavePainter({
+  const _SuccessWavePainter({
     required this.progress,
     required this.color,
   });
@@ -758,7 +758,7 @@ class _SparkleOrnamentsPainter extends CustomPainter {
   final double progress;
   final Color color;
 
-  _SparkleOrnamentsPainter({
+  const _SparkleOrnamentsPainter({
     required this.progress,
     required this.color,
   });

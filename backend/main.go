@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -14,6 +15,7 @@ import (
 func main() {
 	// Initialize Database
 	config.InitDB()
+	controllers.StartBadgeScheduler()
 
 	r := gin.Default()
 
@@ -43,6 +45,12 @@ func main() {
 	// Public Routes
 	api := r.Group("/api/v1")
 	{
+		// Timeline photos (random, unguessable file names; long browser cache).
+		api.GET("/media/*filepath", func(c *gin.Context) {
+			rel := filepath.Clean("/" + c.Param("filepath"))
+			c.Header("Cache-Control", "public, max-age=31536000, immutable")
+			c.File(filepath.Join(controllers.MediaDir(), filepath.FromSlash(rel)))
+		})
 		api.POST("/auth/login", middleware.AuditLogMiddleware("LOGIN"), controllers.Login)
 	}
 
@@ -52,6 +60,8 @@ func main() {
 	{
 		// Profile & Directory Endpoints
 		protected.GET("/auth/me", controllers.GetMe)
+		protected.POST("/auth/refresh", controllers.RefreshToken)
+		protected.GET("/approval/my-approver", controllers.GetMyApprover)
 		protected.GET("/users", controllers.GetAllUsers)
 		protected.PUT("/profile", middleware.AuditLogMiddleware("UPDATE_PROFILE"), controllers.UpdateProfile)
 
@@ -59,6 +69,8 @@ func main() {
 		protected.GET("/attendance/today", controllers.GetTodayStatus)
 		protected.GET("/attendance/all", controllers.GetAllUsersAttendance)
 		protected.GET("/attendance/user/:id", controllers.GetUserMonthlyAttendance)
+		protected.GET("/attendance/map", controllers.GetAttendanceMap)
+		protected.GET("/attendance/export", middleware.AuditLogMiddleware("EXPORT_ATTENDANCE"), controllers.ExportAttendanceExcel)
 		protected.POST("/attendance/check-in", middleware.AuditLogMiddleware("CHECK_IN"), controllers.CheckIn)
 		protected.POST("/attendance/check-out", middleware.AuditLogMiddleware("CHECK_OUT"), controllers.CheckOut)
 		protected.GET("/attendance/history", controllers.GetAttendanceHistory)
@@ -79,6 +91,29 @@ func main() {
 
 		// Company Announcement Endpoints
 		protected.GET("/announcements", controllers.GetAnnouncements)
+
+		// Live push channel (Server-Sent Events)
+		protected.GET("/events", controllers.StreamEvents)
+
+		// Achievement Badges (streak & overtime)
+		protected.GET("/badges/me", controllers.GetMyBadges)
+		protected.GET("/badges/user/:id", controllers.GetUserBadges)
+		protected.POST("/badges/seen", controllers.MarkBadgesSeen)
+		protected.PUT("/badges/feature", controllers.FeatureBadge)
+
+		// Avatar frames (rewards)
+		protected.GET("/frames/me", controllers.GetMyFrames)
+		protected.PUT("/frames/equip", controllers.EquipFrame)
+		protected.GET("/themes/me", controllers.GetMyThemes)
+
+		// Timeline
+		protected.GET("/timeline", controllers.GetTimeline)
+		protected.POST("/timeline/posts", controllers.CreatePost)
+		protected.DELETE("/timeline/posts/:id", controllers.DeletePost)
+		protected.POST("/timeline/posts/:id/like", controllers.ToggleLike)
+		protected.GET("/timeline/posts/:id/comments", controllers.GetComments)
+		protected.POST("/timeline/posts/:id/comments", controllers.AddComment)
+		protected.PUT("/themes/equip", controllers.EquipTheme)
 	}
 
 	// Super Admin Routes
@@ -94,6 +129,11 @@ func main() {
 		admin.POST("/announcements", middleware.AuditLogMiddleware("CREATE_ANNOUNCEMENT"), controllers.CreateAnnouncement)
 		admin.PUT("/announcements/:id", middleware.AuditLogMiddleware("UPDATE_ANNOUNCEMENT"), controllers.UpdateAnnouncement)
 		admin.DELETE("/announcements/:id", middleware.AuditLogMiddleware("DELETE_ANNOUNCEMENT"), controllers.DeleteAnnouncement)
+
+		// Avatar frame rewards
+		admin.GET("/frames/user/:id", controllers.AdminGetUserFrames)
+		admin.POST("/frames/grant", middleware.AuditLogMiddleware("GRANT_FRAME"), controllers.AdminGrantFrame)
+		admin.DELETE("/frames/grant", middleware.AuditLogMiddleware("REVOKE_FRAME"), controllers.AdminRevokeFrame)
 	}
 
 	port := os.Getenv("PORT")

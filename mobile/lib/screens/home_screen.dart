@@ -1,18 +1,58 @@
-import 'dart:convert';
-import 'dart:io';
+import 'dart:async';
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
-import 'package:intl/intl.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart' show LatLng;
+import '../models/badge.dart';
 import '../services/api_service.dart';
-import 'attendance_success_screen.dart';
+import '../services/live_events.dart';
+import '../theme/app_theme.dart';
+import '../utils/avatar_cache.dart';
+import '../widgets/aurora_background.dart';
+import '../widgets/avatar_frame.dart';
+import '../widgets/badge_medal.dart';
+import '../widgets/celebration.dart';
+import '../widgets/motion.dart';
+import '../widgets/streak_flame.dart';
 import 'attendance_log_screen.dart';
+import 'attendance_success_screen.dart';
+import 'badges_screen.dart';
 import 'calendar_screen.dart';
+import 'inbox_screen.dart';
+import 'leave_request_screen.dart';
+
+/// Shift rules shared with the backend badge engine.
+const Duration kShiftSpan = Duration(hours: 9); // 8h work + 1h break
+const Duration kBreak = Duration(hours: 1);
+
+DateTime? parseAttendanceTime(dynamic value) {
+  if (value == null) return null;
+  final str = value.toString().trim();
+  if (str.isEmpty || str == 'null') return null;
+  final dt = DateTime.tryParse(str);
+  if (dt != null) return dt.toLocal();
+  if (str.contains(':')) {
+    final parts = str.split(':');
+    final now = DateTime.now();
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h != null && m != null) return DateTime(now.year, now.month, now.day, h, m);
+  }
+  return null;
+}
+
+String formatDuration(Duration d) {
+  if (d.isNegative) d = Duration.zero;
+  final h = d.inHours;
+  final m = d.inMinutes % 60;
+  if (h == 0) return '${m}m';
+  return '${h}h ${m.toString().padLeft(2, '0')}m';
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,571 +61,291 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   bool _hasCheckedIn = false;
   bool _hasCheckedOut = false;
   Map<String, dynamic>? _todayAttendance;
-  String _userName = 'Budi Santoso';
+  String _userName = '';
   String? _profilePhotoPath;
   List<dynamic> _announcements = [];
-  double _contentOpacity = 0.0;
+  bool _celebrating = false;
 
   double? _currentLat;
   double? _currentLong;
+  double? _currentAccuracy;
   String _currentAddress = 'Fetching location...';
-
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
-
-    _pulseAnimation = Tween<double>(begin: 0.97, end: 1.03).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-
     ApiService.profilePhotoNotifier.addListener(_onPhotoChanged);
+    LiveEvents.announcements.addListener(_onAnnouncements);
     _fetchTodayData();
     _determinePosition();
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
     ApiService.profilePhotoNotifier.removeListener(_onPhotoChanged);
+    LiveEvents.announcements.removeListener(_onAnnouncements);
     super.dispose();
   }
 
+  /// Announcements pushed live by the server appear instantly.
+  void _onAnnouncements() {
+    if (mounted) setState(() => _announcements = LiveEvents.announcements.value);
+  }
+
   void _onPhotoChanged() {
-    if (mounted) {
-      setState(() {
-        _profilePhotoPath = ApiService.profilePhotoNotifier.value;
-      });
-    }
+    final v = ApiService.profilePhotoNotifier.value;
+    if (mounted && v != _profilePhotoPath) setState(() => _profilePhotoPath = v);
   }
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
-    if (hour >= 5 && hour < 12) {
-      return 'Good Morning,';
-    } else if (hour >= 12 && hour < 17) {
-      return 'Good Afternoon,';
-    } else if (hour >= 17 && hour < 21) {
-      return 'Good Evening,';
-    } else {
-      return 'Good Night,';
-    }
+    if (hour >= 5 && hour < 12) return 'Good morning';
+    if (hour >= 12 && hour < 17) return 'Good afternoon';
+    if (hour >= 17 && hour < 21) return 'Good evening';
+    return 'Good night';
   }
 
   Future<void> _fetchTodayData() async {
-    setState(() => _isLoading = true);
     try {
-      final res = await ApiService.getTodayAttendance();
-      final anns = await ApiService.getAnnouncements();
-      String? savedPhoto;
-      try {
-        final profile = await ApiService.getMe();
-        if (profile != null && profile['name'] != null) {
-          _userName = profile['name'];
-        }
-        final userEmail = profile?['email'] ?? '';
-        savedPhoto = await ApiService.getProfilePhoto(userEmail);
-      } catch (_) {
-        savedPhoto = await ApiService.getProfilePhoto();
-      }
+      // All independent requests run in parallel (previously sequential).
+      final results = await Future.wait<dynamic>([
+        ApiService.getTodayAttendance(),
+        ApiService.getAnnouncements(),
+        ApiService.getMe(),
+        ApiService.getMyBadges(),
+      ]);
+      final res = results[0] as Map<String, dynamic>;
+      final anns = results[1] as List<dynamic>;
+      final profile = results[2] as Map<String, dynamic>;
+      final badges = results[3] as BadgeSummary;
+      final serverPhoto = (profile['avatar_url'] ?? '').toString();
+      final savedPhoto = serverPhoto.isNotEmpty ? serverPhoto : await ApiService.getProfilePhoto((profile['email'] ?? '').toString());
 
+      if (!mounted) return;
       setState(() {
+        if (profile['name'] != null) _userName = profile['name'].toString();
         _hasCheckedIn = res['has_checked_in'] ?? false;
         _hasCheckedOut = res['has_checked_out'] ?? false;
-        _todayAttendance = res['data'];
+        _todayAttendance = res['data'] is Map<String, dynamic> ? res['data'] : null;
         _profilePhotoPath = savedPhoto;
         _announcements = anns;
+        LiveEvents.announcements.value = anns.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList();
       });
+      _maybeCelebrate(badges);
     } catch (e) {
       debugPrint('Error fetching today attendance: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-        _contentOpacity = 1.0;
-      });
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  String _getFormattedCheckTime(dynamic value) {
-    if (value == null) return '--:--';
-    final str = value.toString().trim();
-    if (str.isEmpty || str == 'null') return '--:--';
-
-    if (str.length == 5 && str.contains(':')) return str;
-    if (str.contains(' ') && !str.contains('T')) {
-      final parts = str.split(' ');
-      if (parts.length >= 2 && parts[1].contains(':')) {
-        final timePart = parts[1];
-        return timePart.length >= 5 ? timePart.substring(0, 5) : timePart;
-      }
-    }
-
-    try {
-      final dt = DateTime.parse(str);
-      return DateFormat('HH:mm').format(dt.toLocal());
-    } catch (_) {
-      return str.length >= 5 ? str.substring(0, 5) : str;
-    }
+  Future<void> _maybeCelebrate(BadgeSummary badges) async {
+    if (_celebrating || badges.newlyUnlocked.isEmpty || !mounted) return;
+    // Only celebrate when Home is the visible tab.
+    if (!TickerMode.valuesOf(context).enabled) return;
+    _celebrating = true;
+    await showBadgeUnlocked(context, badges.newlyUnlocked);
+    await ApiService.markBadgesSeen(badges.newlyUnlocked.map((b) => b.code).toList());
+    _celebrating = false;
+    ApiService.getMyBadges();
   }
 
-  String? _getWorkDuration() {
-    final inVal = _todayAttendance?['check_in_time'];
-    final outVal = _todayAttendance?['check_out_time'];
-    if (inVal == null) return null;
-
-    try {
-      DateTime inDt;
-      final inStr = inVal.toString().trim();
-      if (inStr.contains('T') || inStr.contains('-')) {
-        inDt = DateTime.parse(inStr).toLocal();
-      } else if (inStr.contains(':')) {
-        final now = DateTime.now();
-        final parts = inStr.split(':');
-        inDt = DateTime(now.year, now.month, now.day, int.parse(parts[0]), int.parse(parts[1]));
-      } else {
-        return null;
-      }
-
-      DateTime outDt;
-      if (outVal != null) {
-        final outStr = outVal.toString().trim();
-        if (outStr.contains('T') || outStr.contains('-')) {
-          outDt = DateTime.parse(outStr).toLocal();
-        } else if (outStr.contains(':')) {
-          final now = DateTime.now();
-          final parts = outStr.split(':');
-          outDt = DateTime(now.year, now.month, now.day, int.parse(parts[0]), int.parse(parts[1]));
-        } else {
-          outDt = DateTime.now();
-        }
-      } else {
-        outDt = DateTime.now();
-      }
-
-      final diff = outDt.difference(inDt);
-      if (diff.isNegative) return null;
-      final hours = diff.inHours;
-      final minutes = diff.inMinutes % 60;
-      if (hours == 0 && minutes == 0) return 'Just started';
-      if (hours == 0) return '${minutes}m worked';
-      return '${hours}h ${minutes}m worked';
-    } catch (_) {
-      return null;
-    }
-  }
-
-  ImageProvider? _getProfileImageProvider([String? customPath]) {
-    final path = (customPath != null && customPath.isNotEmpty) ? customPath : _profilePhotoPath;
-    if (path == null || path.isEmpty) {
-      return null;
-    }
-    if (path.startsWith('data:image')) {
-      final base64Str = path.split(',').last;
-      return MemoryImage(base64Decode(base64Str));
-    } else if (kIsWeb || path.startsWith('http') || path.startsWith('blob:')) {
-      return NetworkImage(path);
-    } else {
-      return FileImage(File(path));
-    }
+  String _fmtTime(dynamic value) {
+    final dt = parseAttendanceTime(value);
+    return dt == null ? '--:--' : DateFormat('HH:mm').format(dt);
   }
 
   Future<void> _determinePosition() async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        setState(() => _currentAddress = 'Location services disabled');
+        if (mounted) setState(() => _currentAddress = 'Location services disabled');
         return;
       }
 
-      LocationPermission permission = await Geolocator.checkPermission();
+      var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          setState(() => _currentAddress = 'Location permission denied');
+          if (mounted) setState(() => _currentAddress = 'Location permission denied');
           return;
         }
       }
-
       if (permission == LocationPermission.deniedForever) {
-        setState(() => _currentAddress = 'Location permission permanently denied');
+        if (mounted) setState(() => _currentAddress = 'Location permission permanently denied');
         return;
       }
 
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
+      // Show the last known fix instantly, then refine with a fresh one.
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null) {
+        _currentLat = last.latitude;
+        _currentLong = last.longitude;
+      }
 
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 12),
+      );
       _currentLat = position.latitude;
       _currentLong = position.longitude;
+      _currentAccuracy = position.accuracy;
 
       try {
-        List<Placemark> placemarks = await placemarkFromCoordinates(
-          position.latitude,
-          position.longitude,
-        );
-        if (placemarks.isNotEmpty) {
-          Placemark place = placemarks[0];
+        final placemarks = await placemarkFromCoordinates(position.latitude, position.longitude);
+        if (placemarks.isNotEmpty && mounted) {
+          final place = placemarks[0];
           setState(() {
-            _currentAddress = '${place.street}, ${place.subLocality}, ${place.locality}';
+            // Full, detailed address for the admin location map.
+            final parts = <String>[];
+            for (final p in [
+              place.name,
+              place.street,
+              place.subLocality,
+              place.locality,
+              place.subAdministrativeArea,
+              place.administrativeArea,
+              place.postalCode,
+            ]) {
+              final v = (p ?? '').trim();
+              if (v.isNotEmpty && !parts.contains(v)) parts.add(v);
+            }
+            _currentAddress = parts.join(', ');
           });
         }
-      } catch (e) {
-        setState(() {
-          _currentAddress = 'Jakarta, Indonesia';
-        });
+      } catch (_) {
+        // Reverse-geocoding failed but we do have coordinates.
+        if (mounted) {
+          setState(() => _currentAddress = '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}');
+        }
       }
-    } catch (e) {
-      setState(() {
-        _currentAddress = 'Jakarta, Indonesia';
-        _currentLat = -6.2088;
-        _currentLong = 106.8456;
-      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _currentAddress = 'Location unavailable — tap to retry');
+      }
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Dialogs & sheets
+  // ---------------------------------------------------------------------------
+
   void _showMapDialog(BuildContext context) {
-    final lat = _currentLat ?? -6.2088;
-    final long = _currentLong ?? 106.8456;
-    final point = LatLng(lat, long);
+    final point = LatLng(_currentLat ?? -6.2088, _currentLong ?? 106.8456);
 
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              height: 280,
+              child: Stack(
                 children: [
-                  const Row(
+                  FlutterMap(
+                    options: MapOptions(initialCenter: point, initialZoom: 16),
                     children: [
-                      Icon(Icons.map_rounded, color: Color(0xFFDC2626)),
-                      SizedBox(width: 8),
-                      Text(
-                        'Location Map',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                      TileLayer(
+                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.example.fid_attendance_mobile',
                       ),
+                      MarkerLayer(markers: [
+                        Marker(point: point, width: 64, height: 64, child: const _PulsingPin()),
+                      ]),
                     ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(ctx),
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Pressable(
+                      onTap: () => Navigator.pop(ctx),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: AppColors.surface, shape: BoxShape.circle, boxShadow: AppShadows.soft),
+                        child: const Icon(Icons.close_rounded, size: 18),
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-
-              // Interactive OpenStreetMap Container
-              Container(
-                height: 250,
-                width: double.infinity,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFCBD5E1)),
-                ),
-                child: FlutterMap(
-                  options: MapOptions(
-                    initialCenter: point,
-                    initialZoom: 15.5,
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: AppColors.redSoft, borderRadius: BorderRadius.circular(12)),
+                    child: Icon(Icons.location_on_rounded, color: AppColors.red),
                   ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.example.fid_attendance_mobile',
-                    ),
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: point,
-                          width: 60,
-                          height: 60,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: const BoxDecoration(
-                                  color: Colors.redAccent,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(color: Colors.black38, blurRadius: 8, offset: Offset(0, 3)),
-                                  ],
-                                ),
-                                child: const Icon(Icons.person_pin_circle, color: Colors.white, size: 24),
-                              ),
-                            ],
-                          ),
-                        ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('DETECTED LOCATION',
+                            style: TextStyle(
+                                fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.textFaint, letterSpacing: 1)),
+                        const SizedBox(height: 3),
+                        Text(_currentAddress, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
                       ],
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF9FAFB),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Detected Address:',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _currentAddress,
-                      style: const TextStyle(fontSize: 13, color: Color(0xFF1E293B), fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC2626),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('Close', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   void _showAnnouncementDialog(String title, String tag, String date, String content) {
-    showDialog(
+    final style = _AnnStyle.of(tag);
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * 0.8),
+        decoration: BoxDecoration(color: AppColors.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(30))),
+        padding: EdgeInsets.fromLTRB(24, 12, 24, 24 + MediaQuery.paddingOf(ctx).bottom),
+        child: SingleChildScrollView(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: tag == 'IMPORTANT'
-                          ? const Color(0xFFFEF2F2)
-                          : tag == 'EVENT'
-                              ? const Color(0xFFFEE2E2)
-                              : const Color(0xFFECFDF5),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      tag,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: tag == 'IMPORTANT'
-                            ? const Color(0xFFEF4444)
-                            : tag == 'EVENT'
-                                ? const Color(0xFFDC2626)
-                                : const Color(0xFF10B981),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 20),
-                    onPressed: () => Navigator.pop(ctx),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                date,
-                style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                content,
-                style: const TextStyle(fontSize: 14, color: Color(0xFF475569), height: 1.5),
+              Center(
+                child: Container(
+                    width: 42,
+                    height: 5,
+                    decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(10))),
               ),
               const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC2626),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(gradient: style.gradient, borderRadius: BorderRadius.circular(14)),
+                    child: Icon(style.icon, color: Colors.white, size: 20),
                   ),
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Close Announcement', style: TextStyle(color: Colors.white)),
-                ),
+                  const SizedBox(width: 12),
+                  Text(tag, style: TextStyle(color: style.color, fontWeight: FontWeight.w900, letterSpacing: 1, fontSize: 12)),
+                  const Spacer(),
+                  Text(date, style: TextStyle(color: AppColors.textFaint, fontSize: 12, fontWeight: FontWeight.w600)),
+                ],
               ),
+              const SizedBox(height: 16),
+              Text(title, style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, letterSpacing: -0.4, height: 1.25)),
+              const SizedBox(height: 12),
+              Text(content, style: TextStyle(fontSize: 14.5, color: AppColors.textMuted, height: 1.6)),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAnnouncementCard({
-    required String title,
-    required String category,
-    required String date,
-    required String snippet,
-    required String content,
-  }) {
-    List<Color> cardGradient = const [Color(0xFFF0FDF4), Color(0xFFF8FAFC), Colors.white];
-    Color borderColor = const Color(0xFFA7F3D0);
-    Color shadowColor = const Color(0xFF10B981);
-    Color tagBg = const Color(0xFFDCFCE7);
-    Color tagColor = const Color(0xFF047857);
-    Color accentBorder = const Color(0xFF10B981);
-
-    if (category == 'IMPORTANT') {
-      cardGradient = const [Color(0xFFFFF1F2), Color(0xFFFFF7F8), Colors.white];
-      borderColor = const Color(0xFFFECDD3);
-      shadowColor = const Color(0xFFE11D48);
-      tagBg = const Color(0xFFFFE4E6);
-      tagColor = const Color(0xFFBE123C);
-      accentBorder = const Color(0xFFE11D48);
-    } else if (category == 'EVENT') {
-      cardGradient = const [Color(0xFFEEF2FF), Color(0xFFF5F3FF), Colors.white];
-      borderColor = const Color(0xFFC7D2FE);
-      shadowColor = const Color(0xFF6366F1);
-      tagBg = const Color(0xFFE0E7FF);
-      tagColor = const Color(0xFF4338CA);
-      accentBorder = const Color(0xFF6366F1);
-    } else if (category == 'MAINTENANCE') {
-      cardGradient = const [Color(0xFFFFFBEB), Color(0xFFFEFCE8), Colors.white];
-      borderColor = const Color(0xFFFDE68A);
-      shadowColor = const Color(0xFFD97706);
-      tagBg = const Color(0xFFFEF3C7);
-      tagColor = const Color(0xFFB45309);
-      accentBorder = const Color(0xFFD97706);
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: cardGradient,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: shadowColor.withValues(alpha: 0.08),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(color: borderColor, width: 1.2),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          onTap: () => _showAnnouncementDialog(title, category, date, content),
-          borderRadius: BorderRadius.circular(18),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Left Vertical Color Bar Accent
-                Container(
-                  width: 4,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: accentBorder,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: tagBg,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              category,
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: tagColor),
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              const Icon(Icons.access_time_rounded, size: 12, color: Color(0xFF94A3B8)),
-                              const SizedBox(width: 4),
-                              Text(
-                                date,
-                                style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        title,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF0F172A), height: 1.3),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        snippet,
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF64748B), height: 1.4),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 6),
-                const Padding(
-                  padding: EdgeInsets.only(top: 14),
-                  child: Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8), size: 20),
-                ),
-              ],
-            ),
           ),
         ),
       ),
@@ -593,9 +353,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   void _openAttendanceBottomSheet(bool isCheckIn) {
-    if (_currentLat == null || _currentLong == null) {
-      _determinePosition();
-    }
+    if (_currentLat == null || _currentLong == null) _determinePosition();
 
     final notesController = TextEditingController();
     XFile? pickedSelfie;
@@ -605,35 +363,27 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (bottomSheetContext) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             final typeText = isCheckIn ? 'Check-In' : 'Check-Out';
-            final primaryColor = isCheckIn ? const Color(0xFFDC2626) : const Color(0xFF10B981);
+            final gradient = isCheckIn ? AppGradients.brand : AppGradients.checkout;
+            final primaryColor = isCheckIn ? AppColors.red : AppColors.success;
 
             Future<void> pickSelfie() async {
+              final picker = ImagePicker();
               try {
-                final picker = ImagePicker();
-                final XFile? photo = await picker.pickImage(
+                final photo = await picker.pickImage(
                   source: ImageSource.camera,
                   preferredCameraDevice: CameraDevice.front,
                   imageQuality: 70,
+                  maxWidth: 1080,
                 );
-                if (photo != null) {
-                  setModalState(() {
-                    pickedSelfie = photo;
-                  });
-                }
-              } catch (e) {
+                if (photo != null) setModalState(() => pickedSelfie = photo);
+              } catch (_) {
                 try {
-                  final picker = ImagePicker();
-                  final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-                  if (image != null) {
-                    setModalState(() {
-                      pickedSelfie = image;
-                    });
-                  }
+                  final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 1080);
+                  if (image != null) setModalState(() => pickedSelfie = image);
                 } catch (err) {
                   debugPrint('Failed to pick selfie: $err');
                 }
@@ -643,9 +393,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             Future<void> submitAttendance() async {
               final notesText = notesController.text.trim();
               if (notesText.isEmpty) {
-                setModalState(() {
-                  modalError = 'Attendance note is required. Please enter your note.';
-                });
+                setModalState(() => modalError = 'Attendance note is required. Please enter your note.');
                 return;
               }
 
@@ -654,299 +402,261 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 modalError = null;
               });
 
+              // Never record a made-up position: get a real GPS fix first.
+              if (_currentLat == null || _currentLong == null) await _determinePosition();
+              if (_currentLat == null || _currentLong == null) {
+                setModalState(() {
+                  isSubmittingModal = false;
+                  modalError = 'Location unavailable. Please turn on GPS / allow location access and try again.';
+                });
+                return;
+              }
+
               try {
                 final now = DateTime.now();
                 if (isCheckIn) {
-                  await ApiService.checkIn(
-                    _currentLat ?? -6.2088,
-                    _currentLong ?? 106.8456,
-                    _currentAddress,
-                  );
+                  await ApiService.checkIn(_currentLat!, _currentLong!, _currentAddress,
+                      accuracy: _currentAccuracy, note: notesText);
                 } else {
-                  await ApiService.checkOut(
-                    _currentLat ?? -6.2088,
-                    _currentLong ?? 106.8456,
-                    _currentAddress,
-                  );
+                  await ApiService.checkOut(_currentLat!, _currentLong!, _currentAddress,
+                      accuracy: _currentAccuracy, note: notesText);
                 }
 
-                if (mounted) {
-                  Navigator.pop(bottomSheetContext); // Close Bottom Sheet
+                if (!mounted || !bottomSheetContext.mounted) return;
+                Navigator.pop(bottomSheetContext);
 
-                  // Navigate to Success Screen
-                  final refreshNeeded = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AttendanceSuccessScreen(
-                        isCheckIn: isCheckIn,
-                        timestamp: now,
-                        address: _currentAddress,
-                        notes: notesController.text.trim(),
-                        imageFile: pickedSelfie,
-                      ),
+                await Navigator.push(
+                  this.context,
+                  MaterialPageRoute(
+                    builder: (_) => AttendanceSuccessScreen(
+                      isCheckIn: isCheckIn,
+                      timestamp: now,
+                      address: _currentAddress,
+                      notes: notesText,
+                      imageFile: pickedSelfie,
                     ),
-                  );
-
-                  if (refreshNeeded == true) {
-                    _fetchTodayData();
-                  }
-                }
+                  ),
+                );
+                if (mounted) _fetchTodayData();
               } catch (e) {
-                setModalState(() {
-                  modalError = e.toString().replaceAll('Exception: ', '');
-                });
+                setModalState(() => modalError = e.toString().replaceAll('Exception: ', ''));
               } finally {
-                setModalState(() => isSubmittingModal = false);
+                if (bottomSheetContext.mounted) setModalState(() => isSubmittingModal = false);
               }
             }
 
+            final hasNoteError = modalError != null && notesController.text.trim().isEmpty;
+
             return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
+              padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
               child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                decoration: BoxDecoration(color: AppColors.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
                 ),
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.fromLTRB(22, 12, 22, 22 + MediaQuery.paddingOf(context).bottom),
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Handle Bar
                       Center(
                         child: Container(
-                          width: 40,
+                          width: 42,
                           height: 5,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFCBD5E1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
+                          decoration: BoxDecoration(color: AppColors.line, borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
-                      const SizedBox(height: 20),
-
-                      // Header Title
+                      const SizedBox(height: 18),
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(10),
+                            width: 48,
+                            height: 48,
                             decoration: BoxDecoration(
-                              color: primaryColor.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(12),
+                              gradient: gradient,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: AppShadows.glow(primaryColor, strength: 0.3),
                             ),
-                            child: Icon(
-                              isCheckIn ? Icons.login_rounded : Icons.logout_rounded,
-                              color: primaryColor,
-                              size: 24,
-                            ),
+                            child: Icon(isCheckIn ? Icons.login_rounded : Icons.logout_rounded, color: Colors.white),
                           ),
-                          const SizedBox(width: 12),
-                          Text(
-                            '$typeText Attendance',
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF0F172A),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(typeText,
+                                    style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, letterSpacing: -0.4)),
+                                Text(DateFormat('EEEE, d MMM · HH:mm').format(DateTime.now()),
+                                    style:
+                                        TextStyle(color: AppColors.textMuted, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                              ],
                             ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 20),
 
-                      // Location Button (Full-width like Selfie button)
-                      const Text(
-                        'Location Map (Optional View)',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                      ),
-                      const SizedBox(height: 6),
-                      InkWell(
+                      // Location
+                      Pressable(
+                        pressedScale: 0.98,
                         onTap: () => _showMapDialog(context),
                         child: Container(
-                          width: double.infinity,
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF9FAFB),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                            color: const Color(0xFFF8F9FC),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.line),
                           ),
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          child: Row(
                             children: [
-                              Icon(Icons.location_on_rounded, color: Color(0xFFDC2626), size: 20),
-                              SizedBox(width: 8),
-                              Text(
-                                'View Location',
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
+                              const SizedBox(width: 36, height: 36, child: _PulsingPin(small: true)),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Your location',
+                                        style: TextStyle(fontSize: 11, color: AppColors.textFaint, fontWeight: FontWeight.w700)),
+                                    Text(_currentAddress,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700)),
+                                  ],
+                                ),
                               ),
+                              Text('Map',
+                                  style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w800, fontSize: 12.5)),
+                              Icon(Icons.chevron_right_rounded, color: AppColors.red, size: 18),
                             ],
                           ),
                         ),
                       ),
                       const SizedBox(height: 16),
 
-                      // Notes Input
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'Attendance Notes (Required) *',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                          ),
-                          if (modalError != null && notesController.text.trim().isEmpty)
-                            const Text(
-                              'Required',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
-                            ),
+                          const Text('Attendance note', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+                          Text(' *', style: TextStyle(color: AppColors.red, fontWeight: FontWeight.w800)),
+                          const Spacer(),
+                          if (hasNoteError)
+                            Text('Required',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.red)),
                         ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       TextField(
                         controller: notesController,
+                        textCapitalization: TextCapitalization.sentences,
                         onChanged: (_) {
-                          if (modalError != null) {
-                            setModalState(() => modalError = null);
-                          }
+                          if (modalError != null) setModalState(() => modalError = null);
                         },
                         decoration: InputDecoration(
-                          hintText: 'e.g., Working from Office / WFH / Client Meeting',
-                          hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                          filled: true,
-                          fillColor: const Color(0xFFF9FAFB),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: (modalError != null && notesController.text.trim().isEmpty)
-                                  ? const Color(0xFFDC2626)
-                                  : const Color(0xFFE2E8F0),
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: (modalError != null && notesController.text.trim().isEmpty)
-                                  ? const Color(0xFFDC2626)
-                                  : const Color(0xFFE2E8F0),
-                            ),
-                          ),
+                          hintText: 'e.g. Working from office / WFH / Client meeting',
+                          enabledBorder: hasNoteError
+                              ? OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: AppColors.red))
+                              : null,
                           focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: (modalError != null && notesController.text.trim().isEmpty)
-                                  ? const Color(0xFFDC2626)
-                                  : primaryColor,
-                              width: 1.5,
-                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: primaryColor, width: 1.6),
                           ),
                         ),
+                      ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: ['Working from office', 'WFH', 'Client visit', 'Business trip'].map((s) {
+                          return Pressable(
+                            onTap: () => setModalState(() {
+                              notesController.text = s;
+                              modalError = null;
+                            }),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: primaryColor.withValues(alpha: 0.07),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: primaryColor.withValues(alpha: 0.2)),
+                              ),
+                              child: Text(s, style: TextStyle(color: primaryColor, fontWeight: FontWeight.w700, fontSize: 12)),
+                            ),
+                          );
+                        }).toList(),
                       ),
                       const SizedBox(height: 16),
 
-                      // Optional Take a Selfie Section
-                      const Text(
-                        'Selfie Photo (Optional)',
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
-                      ),
-                      const SizedBox(height: 6),
-                      InkWell(
+                      const Text('Selfie (optional)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 8),
+                      Pressable(
+                        pressedScale: 0.98,
                         onTap: pickSelfie,
-                        child: Container(
-                          width: double.infinity,
+                        child: AnimatedContainer(
+                          duration: AppMotion.medium,
+                          curve: AppMotion.emphasized,
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF9FAFB),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
-                          ),
-                          child: pickedSelfie != null
-                              ? Row(
-                                  children: [
-                                    const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 24),
-                                    SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        'Selfie Photo Attached (${pickedSelfie!.name})',
-                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1E293B)),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    const Text('Change', style: TextStyle(color: Color(0xFFDC2626), fontSize: 12, fontWeight: FontWeight.bold)),
-                                  ],
-                                )
-                              : const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.camera_alt_rounded, color: Color(0xFFDC2626), size: 20),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Take a Selfie / Attach Photo',
-                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                      ),
-
-                      // In-Modal Error Banner
-                      if (modalError != null) ...[
-                        const SizedBox(height: 16),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFEF2F2),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFFFCA5A5)),
+                            color: pickedSelfie != null ? AppColors.success.withValues(alpha: 0.07) : const Color(0xFFF8F9FC),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: pickedSelfie != null ? AppColors.success.withValues(alpha: 0.4) : AppColors.line,
+                            ),
                           ),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 18),
+                              Icon(pickedSelfie != null ? Icons.check_circle_rounded : Icons.photo_camera_front_rounded,
+                                  color: pickedSelfie != null ? AppColors.success : AppColors.textMuted),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  modalError!,
-                                  style: const TextStyle(
-                                    color: Color(0xFFB91C1C),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.35,
-                                  ),
+                                  pickedSelfie != null ? 'Selfie attached' : 'Take a selfie / attach photo',
+                                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
                                 ),
                               ),
-                              InkWell(
-                                onTap: () => setModalState(() => modalError = null),
-                                child: const Icon(Icons.close_rounded, color: Color(0xFF991B1B), size: 16),
-                              ),
+                              Text(pickedSelfie != null ? 'Change' : 'Open camera',
+                                  style: TextStyle(color: primaryColor, fontSize: 12.5, fontWeight: FontWeight.w800)),
                             ],
                           ),
                         ),
-                      ],
+                      ),
+
+                      AnimatedSize(
+                        duration: AppMotion.medium,
+                        curve: AppMotion.emphasized,
+                        child: modalError == null
+                            ? const SizedBox(width: double.infinity)
+                            : Container(
+                                margin: const EdgeInsets.only(top: 14),
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.redSoft,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: const Color(0xFFFCA5A5)),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(Icons.error_outline_rounded, color: AppColors.red, size: 18),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(modalError!,
+                                          style: TextStyle(
+                                              color: AppColors.redDeep, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                      ),
                       const SizedBox(height: 20),
 
-                      // Confirm Button
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: isSubmittingModal ? null : submitAttendance,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryColor,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: isSubmittingModal
-                              ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
-                              : Text(
-                                  'Confirm $typeText',
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                                ),
-                        ),
+                      _GradientButton(
+                        gradient: gradient,
+                        glow: primaryColor,
+                        loading: isSubmittingModal,
+                        label: 'Confirm $typeText',
+                        icon: isCheckIn ? Icons.fingerprint_rounded : Icons.logout_rounded,
+                        onTap: isSubmittingModal ? null : submitAttendance,
                       ),
                     ],
                   ),
@@ -956,1394 +666,322 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           },
         );
       },
-    );
+    ).whenComplete(notesController.dispose);
   }
 
-  Widget _buildAttendanceCompletedCard() {
-    return Center(
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [
-              Color(0xFFECFDF5),
-              Color(0xFFF2FBF7),
-              Colors.white,
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: const Color(0xFF6EE7B7).withValues(alpha: 0.7),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF10B981).withValues(alpha: 0.12),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            const _AnimatedAttendanceCompletedBadge(),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFD1FAE5),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.check_circle_rounded, size: 12, color: Color(0xFF059669)),
-                  SizedBox(width: 4),
-                  Text(
-                    'Daily Shift Complete',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF059669),
-                    ),
-                  ),
-                ],
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    final checkIn = parseAttendanceTime(_todayAttendance?['check_in_time']);
+    final checkOut = parseAttendanceTime(_todayAttendance?['check_out_time']);
+
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      body: RefreshIndicator(
+        color: AppColors.red,
+        edgeOffset: MediaQuery.paddingOf(context).top,
+        onRefresh: () async {
+          ApiService.invalidateMe();
+          await Future.wait([_fetchTodayData(), _determinePosition()]);
+        },
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          slivers: [
+            SliverToBoxAdapter(
+              child: _HomeHero(
+                greeting: _getGreeting(),
+                name: _userName,
+                photo: _profilePhotoPath,
+                hasCheckedIn: _hasCheckedIn,
+                hasCheckedOut: _hasCheckedOut,
+                checkIn: checkIn,
+                checkOut: checkOut,
+                checkInLabel: _fmtTime(_todayAttendance?['check_in_time']),
+                checkOutLabel: _fmtTime(_todayAttendance?['check_out_time']),
+                loading: _isLoading,
+                onStreakTap: _openBadges,
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Attendance Completed for Today',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF0F172A),
-                letterSpacing: -0.3,
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
+                child: _isLoading
+                    ? const Shimmer(height: 130, radius: 28)
+                    : AnimatedSwitcher(
+                        duration: AppMotion.slow,
+                        switchInCurve: AppMotion.emphasized,
+                        transitionBuilder: (child, a) => FadeTransition(
+                          opacity: a,
+                          child: ScaleTransition(scale: Tween(begin: 0.94, end: 1.0).animate(a), child: child),
+                        ),
+                        child: _hasCheckedOut
+                            ? _CompletedCard(key: const ValueKey('done'), checkIn: checkIn, checkOut: checkOut)
+                            : _AttendanceOrb(
+                                key: ValueKey(_hasCheckedIn),
+                                isCheckIn: !_hasCheckedIn,
+                                address: _currentAddress,
+                                onTap: () => _openAttendanceBottomSheet(!_hasCheckedIn),
+                                onLocationTap: () {
+                                  setState(() => _currentAddress = 'Fetching location...');
+                                  _determinePosition();
+                                },
+                              ),
+                      ),
               ),
             ),
-            const SizedBox(height: 6),
-            const Text(
-              'Thank you for your hard work and dedication today.\nThe attendance button will be available again tomorrow.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: Color(0xFF64748B),
-                height: 1.45,
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                child: FadeSlideIn(delay: const Duration(milliseconds: 120), child: _BadgeStrip(onTap: _openBadges)),
               ),
             ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 26, 20, 12),
+                child: FadeSlideIn(
+                  delay: const Duration(milliseconds: 200),
+                  child: _QuickActions(onBadges: _openBadges),
+                ),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+                child: Row(
+                  children: [
+                    const Text('Announcements', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+                    const Spacer(),
+                    if (_announcements.isNotEmpty)
+                      Text('${math.min(3, _announcements.length)} latest',
+                          style: TextStyle(color: AppColors.textFaint, fontWeight: FontWeight.w700, fontSize: 12)),
+                  ],
+                ),
+              ),
+            ),
+            if (_announcements.isEmpty)
+              const SliverToBoxAdapter(child: _EmptyAnnouncements())
+            else
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverList.builder(
+                  itemCount: math.min(3, _announcements.length),
+                  itemBuilder: (context, i) {
+                    final ann = _announcements[i];
+                    final title = ann['title']?.toString() ?? 'Announcement';
+                    final category = ann['category']?.toString() ?? 'GENERAL';
+                    final content = ann['content']?.toString() ?? '';
+                    final created = DateTime.tryParse(ann['created_at']?.toString() ?? '');
+                    final date = created != null ? DateFormat('d MMM yyyy').format(created.toLocal()) : '';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      key: ValueKey('ann_${ann['id']}'),
+                      child: FadeSlideIn.stagger(
+                        i,
+                        baseMs: 260,
+                        child: _AnnouncementCard(
+                          title: title,
+                          category: category,
+                          date: date,
+                          content: content,
+                          onTap: () => _showAnnouncementDialog(title, category, date, content),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 120)),
           ],
         ),
       ),
     );
   }
 
+  void _openBadges() {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const BadgesScreen()));
+  }
+}
+
+// =============================================================================
+// Hero
+// =============================================================================
+
+class _HomeHero extends StatelessWidget {
+  final String greeting, name;
+  final String? photo;
+  final bool hasCheckedIn, hasCheckedOut, loading;
+  final DateTime? checkIn, checkOut;
+  final String checkInLabel, checkOutLabel;
+  final VoidCallback onStreakTap;
+
+  const _HomeHero({
+    required this.greeting,
+    required this.name,
+    required this.photo,
+    required this.hasCheckedIn,
+    required this.hasCheckedOut,
+    required this.checkIn,
+    required this.checkOut,
+    required this.checkInLabel,
+    required this.checkOutLabel,
+    required this.loading,
+    required this.onStreakTap,
+  });
+
   @override
   Widget build(BuildContext context) {
-    final nowStr = DateFormat('EEEE, d MMMM yyyy').format(DateTime.now());
+    final top = MediaQuery.paddingOf(context).top;
+    final status = hasCheckedOut ? 'Shift complete' : (hasCheckedIn ? 'On shift' : 'Not checked in');
+    final statusColor = hasCheckedOut ? const Color(0xFF34D399) : (hasCheckedIn ? AppColors.amber : Colors.white70);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFFDC2626)))
-            : RefreshIndicator(
-                onRefresh: () async {
-                  await _fetchTodayData();
-                  await _determinePosition();
-                },
-                child: AnimatedOpacity(
-                  opacity: _contentOpacity,
-                  duration: const Duration(milliseconds: 400),
-                  curve: Curves.easeOutCubic,
-                  child: SingleChildScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                      // User Greeting & Profile Avatar Header
-                      Row(
+    return AuroraBackground(
+      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(34)),
+      child: Stack(
+        children: [
+          const Positioned.fill(child: CustomPaint(painter: DotGridPainter())),
+          Padding(
+            padding: EdgeInsets.fromLTRB(20, top + 12, 20, 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _Avatar(photo: photo, name: name),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Stack(
-                            children: [
-                              ValueListenableBuilder<String?>(
-                                valueListenable: ApiService.profilePhotoNotifier,
-                                builder: (context, photoNotifierValue, _) {
-                                  final currentPhoto = (photoNotifierValue != null && photoNotifierValue.isNotEmpty)
-                                      ? photoNotifierValue
-                                      : _profilePhotoPath;
-                                  final imageProvider = _getProfileImageProvider(currentPhoto);
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(color: Colors.white, width: 2),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(0xFFDC2626).withOpacity(0.25),
-                                          blurRadius: 10,
-                                          offset: const Offset(0, 4),
-                                        ),
-                                      ],
-                                    ),
-                                    child: CircleAvatar(
-                                      radius: 26,
-                                      backgroundColor: const Color(0xFFDC2626),
-                                      backgroundImage: imageProvider,
-                                      child: (currentPhoto == null || currentPhoto.isEmpty)
-                                          ? Text(
-                                              _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 20,
-                                              ),
-                                            )
-                                          : null,
-                                    ),
-                                  );
-                                },
-                              ),
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                  width: 14,
-                                  height: 14,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF10B981),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white, width: 2),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                          Text('$greeting 👋',
+                              style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7), fontSize: 12.5, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 2),
+                          Text(name.isEmpty ? ' ' : name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 19, fontWeight: FontWeight.w900, letterSpacing: -0.4)),
+                        ],
+                      ),
+                    ),
+                    _StreakChip(onTap: onStreakTap),
+                    const SizedBox(width: 8),
+                    const _InboxBell(),
+                  ],
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const _LiveClock(),
+                          const SizedBox(height: 4),
+                          Text(DateFormat('EEEE, d MMMM yyyy').format(DateTime.now()),
+                              style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7), fontSize: 12.5, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 12),
+                          AnimatedContainer(
+                            duration: AppMotion.medium,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: statusColor.withValues(alpha: 0.16),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: statusColor.withValues(alpha: 0.35)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  _getGreeting(),
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Color(0xFF64748B),
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  _userName,
-                                  style: const TextStyle(
-                                    fontSize: 19,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF0F172A),
-                                    letterSpacing: -0.3,
-                                  ),
-                                ),
+                                _BlinkDot(color: statusColor, blink: hasCheckedIn && !hasCheckedOut),
+                                const SizedBox(width: 6),
+                                Text(status, style: TextStyle(color: statusColor, fontSize: 11.5, fontWeight: FontWeight.w800)),
                               ],
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
-
-                      // Header Date & Attendance Status Banner Card
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFEF4444), Color(0xFFDC2626), Color(0xFF991B1B)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFDC2626).withOpacity(0.3),
-                              blurRadius: 16,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Icon(Icons.calendar_today_rounded, color: Colors.white70, size: 14),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      nowStr,
-                                      style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
-                                    ),
-                                  ],
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 6,
-                                        height: 6,
-                                        decoration: BoxDecoration(
-                                          color: _hasCheckedIn ? const Color(0xFF34D399) : Colors.white70,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        _hasCheckedOut ? 'FINISHED' : (_hasCheckedIn ? 'CHECKED IN' : 'PENDING'),
-                                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            // Dual Check In / Check Out Executive Dashboard Cards
-                            Row(
-                              children: [
-                                // Check In Card
-                                Expanded(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.16),
-                                      borderRadius: BorderRadius.circular(18),
-                                      border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
-                                    ),
-                                    child: Stack(
-                                      children: [
-                                        // Subtle Watermark Icon in background to eliminate empty feeling
-                                        Positioned(
-                                          right: -4,
-                                          bottom: -6,
-                                          child: Icon(
-                                            Icons.login_rounded,
-                                            size: 42,
-                                            color: Colors.white.withValues(alpha: 0.08),
-                                          ),
-                                        ),
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                              children: [
-                                                Text(
-                                                  'CHECK IN',
-                                                  style: TextStyle(
-                                                    color: Colors.white.withValues(alpha: 0.8),
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: 0.8,
-                                                  ),
-                                                ),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: _hasCheckedIn
-                                                        ? const Color(0xFF10B981).withValues(alpha: 0.28)
-                                                        : Colors.white.withValues(alpha: 0.12),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                  ),
-                                                  child: Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      Container(
-                                                        width: 5,
-                                                        height: 5,
-                                                        decoration: BoxDecoration(
-                                                          color: _hasCheckedIn ? const Color(0xFF34D399) : Colors.white60,
-                                                          shape: BoxShape.circle,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 4),
-                                                      Text(
-                                                        _hasCheckedIn ? 'Recorded' : 'Expected',
-                                                        style: TextStyle(
-                                                          color: _hasCheckedIn ? const Color(0xFF34D399) : Colors.white70,
-                                                          fontSize: 9.5,
-                                                          fontWeight: FontWeight.bold,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Row(
-                                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                                              textBaseline: TextBaseline.alphabetic,
-                                              children: [
-                                                Text(
-                                                  _getFormattedCheckTime(_todayAttendance?['check_in_time']),
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 19,
-                                                    fontWeight: FontWeight.w900,
-                                                    letterSpacing: 0.5,
-                                                  ),
-                                                ),
-                                                if (_hasCheckedIn) ...[
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    'WIB',
-                                                    style: TextStyle(
-                                                      color: Colors.white.withValues(alpha: 0.65),
-                                                      fontSize: 10,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              _hasCheckedIn ? 'Shift In • On-site' : 'Target: 08:00 WIB',
-                                              style: TextStyle(
-                                                color: Colors.white.withValues(alpha: 0.65),
-                                                fontSize: 10.5,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-
-                                // Check Out Card
-                                Expanded(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: 0.16),
-                                      borderRadius: BorderRadius.circular(18),
-                                      border: Border.all(color: Colors.white.withValues(alpha: 0.24)),
-                                    ),
-                                    child: Stack(
-                                      children: [
-                                        // Subtle Watermark Icon in background to eliminate empty feeling
-                                        Positioned(
-                                          right: -4,
-                                          bottom: -6,
-                                          child: Icon(
-                                            Icons.logout_rounded,
-                                            size: 42,
-                                            color: Colors.white.withValues(alpha: 0.08),
-                                          ),
-                                        ),
-                                        Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                              children: [
-                                                Text(
-                                                  'CHECK OUT',
-                                                  style: TextStyle(
-                                                    color: Colors.white.withValues(alpha: 0.8),
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: 0.8,
-                                                  ),
-                                                ),
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                  decoration: BoxDecoration(
-                                                    color: _hasCheckedOut
-                                                        ? const Color(0xFF10B981).withValues(alpha: 0.28)
-                                                        : (_hasCheckedIn
-                                                            ? const Color(0xFFF59E0B).withValues(alpha: 0.28)
-                                                            : Colors.white.withValues(alpha: 0.12)),
-                                                    borderRadius: BorderRadius.circular(6),
-                                                  ),
-                                                  child: Row(
-                                                    mainAxisSize: MainAxisSize.min,
-                                                    children: [
-                                                      Container(
-                                                        width: 5,
-                                                        height: 5,
-                                                        decoration: BoxDecoration(
-                                                          color: _hasCheckedOut
-                                                              ? const Color(0xFF34D399)
-                                                              : (_hasCheckedIn ? const Color(0xFFFBBF24) : Colors.white60),
-                                                          shape: BoxShape.circle,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 4),
-                                                      Text(
-                                                        _hasCheckedOut
-                                                            ? 'Recorded'
-                                                            : (_hasCheckedIn ? 'Working' : 'Pending'),
-                                                        style: TextStyle(
-                                                          color: _hasCheckedOut
-                                                              ? const Color(0xFF34D399)
-                                                              : (_hasCheckedIn ? const Color(0xFFFBBF24) : Colors.white70),
-                                                          fontSize: 9.5,
-                                                          fontWeight: FontWeight.bold,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Row(
-                                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                                              textBaseline: TextBaseline.alphabetic,
-                                              children: [
-                                                Text(
-                                                  _getFormattedCheckTime(_todayAttendance?['check_out_time']),
-                                                  style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 19,
-                                                    fontWeight: FontWeight.w900,
-                                                    letterSpacing: 0.5,
-                                                  ),
-                                                ),
-                                                if (_hasCheckedOut) ...[
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    'WIB',
-                                                    style: TextStyle(
-                                                      color: Colors.white.withValues(alpha: 0.65),
-                                                      fontSize: 10,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              _hasCheckedOut
-                                                  ? (_getWorkDuration() ?? 'Shift Finished')
-                                                  : (_hasCheckedIn
-                                                      ? (_getWorkDuration() ?? 'Target: 17:00 WIB')
-                                                      : 'Target: 17:00 WIB'),
-                                              style: TextStyle(
-                                                color: Colors.white.withValues(alpha: 0.65),
-                                                fontSize: 10.5,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-
-                            // Shift Timeline Progress Indicator (Fills space with useful, lively status)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _hasCheckedOut
-                                        ? Icons.verified_rounded
-                                        : (_hasCheckedIn ? Icons.timelapse_rounded : Icons.info_outline_rounded),
-                                    size: 14,
-                                    color: _hasCheckedOut
-                                        ? const Color(0xFF34D399)
-                                        : (_hasCheckedIn ? const Color(0xFFFBBF24) : Colors.white70),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      _hasCheckedOut
-                                          ? 'Daily work shift successfully completed (${_getWorkDuration() ?? "Full Day"})'
-                                          : (_hasCheckedIn
-                                              ? 'Active shift in progress • ${_getWorkDuration() ?? "Working"}'
-                                              : 'Standard Working Hours: 08:00 - 17:00 WIB (8 hrs)'),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 24),
-
-                    const SizedBox(height: 12),
-
-                    // Central Circular Radar Attendance Action (or Completed Status)
-                    _hasCheckedOut
-                        ? _buildAttendanceCompletedCard()
-                        : _CircularRadarAttendanceButton(
-                            isCheckedIn: _hasCheckedIn,
-                            onTap: () => _openAttendanceBottomSheet(!_hasCheckedIn),
-                          ),
-
-                    const SizedBox(height: 24),
-
-                    // Quick Services / Applications & Requests Section Header
-                    const Text(
-                      'Applications & Services',
-                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF0F172A), letterSpacing: -0.2),
                     ),
-                    const SizedBox(height: 14),
-
-                    // Single Row: Attendance Log & Calendar Cards
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _AnimatedActionCard(
-                            title: 'Attendance Log',
-                            subtitle: 'History & Records',
-                            icon: Icons.receipt_long_rounded,
-                            gradientColors: const [Color(0xFF059669), Color(0xFF10B981)],
-                            accentColor: const Color(0xFF10B981),
-                            bgPillColor: const Color(0xFFD1FAE5),
-                            cardGradient: const [
-                              Color(0xFFF0FDF4),
-                              Color(0xFFF8FAFC),
-                              Colors.white,
-                            ],
-                            borderColor: const Color(0xFFA7F3D0).withValues(alpha: 0.85),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const AttendanceLogScreen()),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: _AnimatedActionCard(
-                            title: 'Calendar',
-                            subtitle: 'Schedule & Shifts',
-                            icon: Icons.event_available_rounded,
-                            gradientColors: const [Color(0xFF4F46E5), Color(0xFF7C3AED)],
-                            accentColor: const Color(0xFF6366F1),
-                            bgPillColor: const Color(0xFFEDE9FE),
-                            cardGradient: const [
-                              Color(0xFFEEF2FF),
-                              Color(0xFFF8FAFF),
-                              Colors.white,
-                            ],
-                            borderColor: const Color(0xFFC7D2FE).withValues(alpha: 0.85),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const CalendarScreen()),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 28),
-
-                    // Announcement Section
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.campaign_rounded, color: Color(0xFFDC2626), size: 22),
-                            SizedBox(width: 8),
-                            Text(
-                              'Company Announcements',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                            ),
-                          ],
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFEE2E2),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Text(
-                            'Latest 3',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-
-                    // Dynamic Announcement Cards from Backend (Strictly 3 items)
-                    if (_announcements.isEmpty)
-                      Container(
-                        padding: const EdgeInsets.all(22),
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: const Center(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.campaign_outlined, size: 18, color: Color(0xFF94A3B8)),
-                              SizedBox(width: 8),
-                              Text(
-                                'No announcements published yet',
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Color(0xFF64748B)),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    else
-                      Column(
-                        children: _announcements.take(3).map((ann) {
-                          final title = ann['title']?.toString() ?? 'Announcement';
-                          final category = ann['category']?.toString() ?? 'GENERAL';
-                          final content = ann['content']?.toString() ?? '';
-                          final createdAt = ann['created_at']?.toString() ?? '';
-                          String formattedDate = '';
-                          if (createdAt.length >= 10) {
-                            formattedDate = createdAt.substring(0, 10);
-                          }
-                          final snippet = content.length > 90 ? '${content.substring(0, 90)}...' : content;
-
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: _buildAnnouncementCard(
-                              title: title,
-                              category: category,
-                              date: formattedDate,
-                              snippet: snippet,
-                              content: content,
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    const SizedBox(height: 16),
-                    ],
-                  ),
+                    _ShiftRing(checkIn: checkIn, checkOut: checkOut, size: 118),
+                  ],
                 ),
-              ),
-            ),
-      ),
-    );
-  }
-}
-
-class _CircularRadarAttendanceButton extends StatefulWidget {
-  final bool isCheckedIn;
-  final VoidCallback onTap;
-
-  const _CircularRadarAttendanceButton({
-    required this.isCheckedIn,
-    required this.onTap,
-  });
-
-  @override
-  State<_CircularRadarAttendanceButton> createState() => _CircularRadarAttendanceButtonState();
-}
-
-class _CircularRadarAttendanceButtonState extends State<_CircularRadarAttendanceButton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _radarController;
-  bool _isPressed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _radarController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2400),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _radarController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // If not checked in: Button action is CHECK IN (Crimson Red theme)
-    // If already checked in: Button action is CHECK OUT (Emerald Green theme)
-    final bool isCheckInAction = !widget.isCheckedIn;
-
-    final Color primaryColor = isCheckInAction
-        ? const Color(0xFFDC2626) // Crimson Red
-        : const Color(0xFF10B981); // Emerald Green
-
-    final Color lightColor = isCheckInAction
-        ? const Color(0xFFEF4444)
-        : const Color(0xFF34D399);
-
-    final Color darkColor = isCheckInAction
-        ? const Color(0xFF991B1B)
-        : const Color(0xFF047857);
-
-    final String titleText = isCheckInAction ? 'CHECK IN' : 'CHECK OUT';
-
-    const double buttonDiameter = 154.0;
-    const double containerSize = 250.0;
-
-    return Center(
-      child: SizedBox(
-        width: containerSize,
-        height: containerSize,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Animated Radar Waves (Ripples + 360-deg Sweep Effect)
-            AnimatedBuilder(
-              animation: _radarController,
-              builder: (context, _) {
-                return CustomPaint(
-                  size: const Size(containerSize, containerSize),
-                  painter: _RadarWavePainter(
-                    progress: _radarController.value,
-                    color: primaryColor,
-                    buttonRadius: buttonDiameter / 2,
-                  ),
-                );
-              },
-            ),
-
-            // Ambient Radial Glow under the button
-            Container(
-              width: buttonDiameter + 12,
-              height: buttonDiameter + 12,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: primaryColor.withValues(alpha: 0.40),
-                    blurRadius: 32,
-                    spreadRadius: 4,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-            ),
-
-            // Interactive Circular Button with Tactile Tap Feedback
-            GestureDetector(
-              onTapDown: (_) => setState(() => _isPressed = true),
-              onTapUp: (_) {
-                setState(() => _isPressed = false);
-                widget.onTap();
-              },
-              onTapCancel: () => setState(() => _isPressed = false),
-              child: AnimatedScale(
-                scale: _isPressed ? 0.93 : 1.0,
-                duration: const Duration(milliseconds: 140),
-                curve: Curves.easeInOut,
-                child: Container(
-                  width: buttonDiameter,
-                  height: buttonDiameter,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [lightColor, primaryColor, darkColor],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.45),
-                      width: 3.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: primaryColor.withValues(alpha: 0.5),
-                        blurRadius: 20,
-                        offset: const Offset(0, 10),
-                      ),
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.15),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Text(
-                      titleText,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 2.0,
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _TimeTile(
+                        label: 'CHECK IN',
+                        value: checkInLabel,
+                        hint: hasCheckedIn ? 'Recorded' : 'Target 08:00',
+                        icon: Icons.login_rounded,
+                        done: hasCheckedIn,
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _TimeTile(
+                        label: 'CHECK OUT',
+                        value: checkOutLabel,
+                        hint: hasCheckedOut
+                            ? 'Recorded'
+                            : (checkIn != null
+                                ? 'Earliest ${DateFormat('HH:mm').format(checkIn!.add(kShiftSpan))}'
+                                : 'Target 17:00'),
+                        icon: Icons.logout_rounded,
+                        done: hasCheckedOut,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _RadarWavePainter extends CustomPainter {
-  final double progress;
-  final Color color;
-  final double buttonRadius;
-
-  _RadarWavePainter({
-    required this.progress,
-    required this.color,
-    required this.buttonRadius,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final maxRadius = (size.width / 2) - 4;
-    final maxExpansion = maxRadius - buttonRadius;
-
-    // 1. Rotating Radar Sweep Gradient (360-degree sweep)
-    final sweepAngle = progress * 2 * math.pi;
-    final sweepPaint = Paint()
-      ..shader = SweepGradient(
-        startAngle: 0.0,
-        endAngle: math.pi / 2,
-        colors: [
-          color.withValues(alpha: 0.0),
-          color.withValues(alpha: 0.15),
+          ),
         ],
-        transform: GradientRotation(sweepAngle),
-      ).createShader(Rect.fromCircle(center: center, radius: maxRadius));
-    canvas.drawCircle(center, maxRadius, sweepPaint);
-
-    // 2. Concentric Expanding Radar Waves (3 Staggered Rings with Cubic Easing)
-    const int ringCount = 3;
-    for (int i = 0; i < ringCount; i++) {
-      final ringProgress = (progress + (i / ringCount)) % 1.0;
-      final curvedProgress = Curves.easeOutCubic.transform(ringProgress);
-      final currentRadius = buttonRadius + (curvedProgress * maxExpansion);
-      final opacity = ((1.0 - ringProgress) * 0.42).clamp(0.0, 1.0);
-
-      // Translucent wave fill
-      final fillPaint = Paint()
-        ..color = color.withValues(alpha: opacity * 0.22)
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(center, currentRadius, fillPaint);
-
-      // Wave stroke outline
-      final strokePaint = Paint()
-        ..color = color.withValues(alpha: opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0;
-      canvas.drawCircle(center, currentRadius, strokePaint);
-    }
-
-    // 3. Faint Outer Radar Boundary Ring
-    final boundaryPaint = Paint()
-      ..color = color.withValues(alpha: 0.18)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawCircle(center, maxRadius, boundaryPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _RadarWavePainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.color != color;
-  }
-}
-
-class _AnimatedActionCard extends StatefulWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final List<Color> gradientColors;
-  final Color accentColor;
-  final Color bgPillColor;
-  final List<Color>? cardGradient;
-  final Color? borderColor;
-  final VoidCallback onTap;
-
-  const _AnimatedActionCard({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.gradientColors,
-    required this.accentColor,
-    required this.bgPillColor,
-    this.cardGradient,
-    this.borderColor,
-    required this.onTap,
-  });
-
-  @override
-  State<_AnimatedActionCard> createState() => _AnimatedActionCardState();
-}
-
-class _AnimatedActionCardState extends State<_AnimatedActionCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _pulseController;
-  bool _isPressed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2500),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) {
-        setState(() => _isPressed = false);
-        widget.onTap();
-      },
-      onTapCancel: () => setState(() => _isPressed = false),
-      child: AnimatedScale(
-        scale: _isPressed ? 0.94 : 1.0,
-        duration: const Duration(milliseconds: 140),
-        curve: Curves.easeInOut,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 14),
-          decoration: BoxDecoration(
-            gradient: widget.cardGradient != null
-                ? LinearGradient(
-                    colors: widget.cardGradient!,
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : null,
-            color: widget.cardGradient == null ? Colors.white : null,
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(
-              color: widget.borderColor ?? const Color(0xFFE2E8F0),
-              width: 1.2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF0F172A).withValues(alpha: 0.03),
-                blurRadius: 14,
-                offset: const Offset(0, 4),
-              ),
-              BoxShadow(
-                color: widget.accentColor.withValues(alpha: 0.09),
-                blurRadius: 18,
-                offset: const Offset(0, 7),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Lively Animated Glowing & Floating Icon Badge
-              SizedBox(
-                height: 72,
-                width: 72,
-                child: AnimatedBuilder(
-                  animation: _pulseController,
-                  builder: (context, _) {
-                    final pulse = _pulseController.value;
-                    final floatY = math.sin(pulse * 2 * math.pi) * 3.5;
-                    final tiltAngle = math.cos(pulse * 2 * math.pi) * 0.045;
-                    final shimmerX = -50.0 + (pulse * 120.0);
-                    final sparkleOpacity = (0.3 + 0.7 * math.sin(pulse * 2 * math.pi).abs()).clamp(0.0, 1.0);
-
-                    return Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // Dynamic Expanding Concentric Wave Ripples
-                        CustomPaint(
-                          size: const Size(72, 72),
-                          painter: _CardRipplePainter(
-                            progress: pulse,
-                            color: widget.accentColor,
-                          ),
-                        ),
-
-                        // Levitating, Tilting Badge
-                        Transform.translate(
-                          offset: Offset(0, floatY),
-                          child: Transform.rotate(
-                            angle: tiltAngle,
-                            child: Container(
-                              width: 54,
-                              height: 54,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(18),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: widget.accentColor.withValues(
-                                      alpha: 0.35 + (0.15 * math.sin(pulse * 2 * math.pi).abs()),
-                                    ),
-                                    blurRadius: 14 + (6 * math.sin(pulse * 2 * math.pi).abs()),
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(18),
-                                child: Stack(
-                                  children: [
-                                    // Rich Multi-stop Gradient Background
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          colors: widget.gradientColors,
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                      ),
-                                      child: Center(
-                                        child: Icon(
-                                          widget.icon,
-                                          color: Colors.white,
-                                          size: 27,
-                                        ),
-                                      ),
-                                    ),
-
-                                    // Moving Specular Light Beam / Gleam
-                                    Transform.translate(
-                                      offset: Offset(shimmerX, -10),
-                                      child: Transform.rotate(
-                                        angle: 0.45,
-                                        child: Container(
-                                          width: 18,
-                                          height: 80,
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              colors: [
-                                                Colors.white.withValues(alpha: 0.0),
-                                                Colors.white.withValues(alpha: 0.45),
-                                                Colors.white.withValues(alpha: 0.0),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // Twinkling Sparkle Star Accent (Top-Right)
-                        Positioned(
-                          top: 2,
-                          right: 4,
-                          child: Opacity(
-                            opacity: sparkleOpacity,
-                            child: Transform.rotate(
-                              angle: pulse * math.pi,
-                              child: Icon(
-                                Icons.auto_awesome_rounded,
-                                size: 14,
-                                color: widget.accentColor,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Title
-              Text(
-                widget.title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13.5,
-                  color: Color(0xFF0F172A),
-                  letterSpacing: -0.2,
-                ),
-              ),
-              const SizedBox(height: 3),
-
-              // Subtitle
-              Text(
-                widget.subtitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // Animated Micro Action Pill
-              AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, _) {
-                  final shift = math.sin(_pulseController.value * 2 * math.pi) * 2.5;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: widget.bgPillColor,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'View',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.bold,
-                            color: widget.accentColor,
-                          ),
-                        ),
-                        const SizedBox(width: 3),
-                        Transform.translate(
-                          offset: Offset(shift, 0),
-                          child: Icon(
-                            Icons.arrow_forward_rounded,
-                            size: 13,
-                            color: widget.accentColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
 }
 
-/// CustomPainter for expanding card wave ripples
-class _CardRipplePainter extends CustomPainter {
-  final double progress;
-  final Color color;
-
-  _CardRipplePainter({
-    required this.progress,
-    required this.color,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    const double minR = 25.0;
-    const double maxR = 36.0;
-
-    for (int i = 0; i < 2; i++) {
-      final waveProgress = (progress + (i * 0.5)) % 1.0;
-      final radius = minR + (maxR - minR) * waveProgress;
-      final opacity = (1.0 - waveProgress) * 0.35;
-
-      final paint = Paint()
-        ..color = color.withValues(alpha: opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5;
-
-      canvas.drawCircle(center, radius, paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _CardRipplePainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.color != color;
-  }
-}
-
-/// Lively Animated Completed Attendance Badge with expanding waves, levitation,
-/// gleam shine sweep, and orbiting sparkle stars.
-class _AnimatedAttendanceCompletedBadge extends StatefulWidget {
-  const _AnimatedAttendanceCompletedBadge();
-
-  @override
-  State<_AnimatedAttendanceCompletedBadge> createState() =>
-      _AnimatedAttendanceCompletedBadgeState();
-}
-
-class _AnimatedAttendanceCompletedBadgeState
-    extends State<_AnimatedAttendanceCompletedBadge>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2600),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+class _Avatar extends StatelessWidget {
+  final String? photo;
+  final String name;
+  const _Avatar({required this.photo, required this.name});
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 110,
-      height: 110,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          final progress = _controller.value;
-          final floatY = math.sin(progress * 2 * math.pi) * 3.5;
-          final shimmerX = -60.0 + (progress * 160.0);
-          final starOpacity = (0.3 + 0.7 * math.sin(progress * 2 * math.pi).abs()).clamp(0.0, 1.0);
-
-          return Stack(
-            alignment: Alignment.center,
-            children: [
-              // Concentric Emerald Expanding Wave Ripples
-              CustomPaint(
-                size: const Size(110, 110),
-                painter: _CompletedRipplePainter(progress: progress),
+    return ValueListenableBuilder<String?>(
+      valueListenable: ApiService.profilePhotoNotifier,
+      builder: (context, notifierPhoto, _) => ValueListenableBuilder<String>(
+        valueListenable: ApiService.frameNotifier,
+        builder: (context, frame, _) {
+          final p = (notifierPhoto != null && notifierPhoto.isNotEmpty) ? notifierPhoto : photo;
+          if (kFrameStyles.containsKey(frame)) {
+            return FramedAvatar(frame: frame, photo: p, name: name, size: 44);
+          }
+          final img = AvatarCache.provider(p);
+          return Container(
+            padding: const EdgeInsets.all(2.5),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: SweepGradient(colors: [AppColors.amber, AppColors.red, AppColors.magenta, AppColors.amber]),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.ink),
+              child: CircleAvatar(
+                radius: 22,
+                backgroundColor: AppColors.red,
+                backgroundImage: img,
+                child: img == null
+                    ? Text(name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18))
+                    : null,
               ),
-
-              // Levitating Central Badge
-              Transform.translate(
-                offset: Offset(0, floatY),
-                child: Container(
-                  width: 74,
-                  height: 74,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF059669), Color(0xFF10B981), Color(0xFF34D399)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF10B981).withValues(
-                          alpha: 0.35 + (0.15 * math.sin(progress * 2 * math.pi).abs()),
-                        ),
-                        blurRadius: 18 + (6 * math.sin(progress * 2 * math.pi).abs()),
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: ClipOval(
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        // Inner Check Icon
-                        const Icon(
-                          Icons.task_alt_rounded,
-                          color: Colors.white,
-                          size: 40,
-                        ),
-
-                        // Moving Specular Gleam Sweep
-                        Transform.translate(
-                          offset: Offset(shimmerX, -10),
-                          child: Transform.rotate(
-                            angle: 0.45,
-                            child: Container(
-                              width: 22,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.white.withValues(alpha: 0.0),
-                                    Colors.white.withValues(alpha: 0.55),
-                                    Colors.white.withValues(alpha: 0.0),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // Twinkling Sparkle Star Top-Right
-              Positioned(
-                top: 8,
-                right: 14,
-                child: Opacity(
-                  opacity: starOpacity,
-                  child: Transform.rotate(
-                    angle: progress * 2 * math.pi,
-                    child: const Icon(
-                      Icons.auto_awesome_rounded,
-                      size: 16,
-                      color: Color(0xFF10B981),
-                    ),
-                  ),
-                ),
-              ),
-
-              // Twinkling Sparkle Star Bottom-Left
-              Positioned(
-                bottom: 12,
-                left: 14,
-                child: Opacity(
-                  opacity: (1.0 - starOpacity).clamp(0.2, 1.0),
-                  child: Transform.rotate(
-                    angle: -progress * 2 * math.pi,
-                    child: const Icon(
-                      Icons.star_rounded,
-                      size: 14,
-                      color: Color(0xFF34D399),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           );
         },
       ),
@@ -2351,33 +989,1189 @@ class _AnimatedAttendanceCompletedBadgeState
   }
 }
 
-class _CompletedRipplePainter extends CustomPainter {
-  final double progress;
-
-  _CompletedRipplePainter({required this.progress});
+/// Inbox (notifications + approvals) lives behind a bell with a live count.
+class _InboxBell extends StatelessWidget {
+  const _InboxBell();
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    const double minR = 38.0;
-    const double maxR = 52.0;
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<int>(
+      valueListenable: ApiService.inboxBadgeNotifier,
+      builder: (context, count, _) => Pressable(
+        onTap: () async {
+          await Navigator.push(context, MaterialPageRoute(builder: (_) => const InboxScreen()));
+          ApiService.refreshInboxCount();
+        },
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+              ),
+              child: const Icon(Icons.notifications_rounded, color: Colors.white, size: 20),
+            ),
+            if (count > 0)
+              Positioned(
+                top: -4,
+                right: -4,
+                child: TweenAnimationBuilder<double>(
+                  key: ValueKey(count),
+                  tween: Tween(begin: 0.4, end: 1),
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.elasticOut,
+                  builder: (context, s, child) => Transform.scale(scale: s, child: child),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    constraints: const BoxConstraints(minWidth: 18),
+                    decoration: BoxDecoration(
+                      color: AppColors.amber,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.ink, width: 1.5),
+                    ),
+                    child: Text(count > 99 ? '99+' : '$count',
+                        textAlign: TextAlign.center, style: const TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.w900)),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-    for (int i = 0; i < 2; i++) {
-      final waveProgress = (progress + (i * 0.5)) % 1.0;
-      final radius = minR + (maxR - minR) * waveProgress;
-      final opacity = (1.0 - waveProgress) * 0.38;
+class _StreakChip extends StatelessWidget {
+  final VoidCallback onTap;
+  const _StreakChip({required this.onTap});
 
-      final paint = Paint()
-        ..color = const Color(0xFF10B981).withValues(alpha: opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0;
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<BadgeSummary>(
+      valueListenable: ApiService.badgesNotifier,
+      builder: (context, s, _) {
+        final streak = s.stats.currentStreak;
+        final lit = streak > 0 && s.stats.streakAliveToday;
+        return Pressable(
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(10, 7, 12, 7),
+            decoration: BoxDecoration(color: AppColors.surface.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                StreakFlame(size: 20, lit: lit),
+                const SizedBox(width: 6),
+                AnimatedCount(
+                  value: streak,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
 
-      canvas.drawCircle(center, radius, paint);
+/// Ticks once per second but only rebuilds itself, and skips rebuilds while
+/// its tab is hidden (TickerMode disabled).
+class _LiveClock extends StatefulWidget {
+  const _LiveClock();
+
+  @override
+  State<_LiveClock> createState() => _LiveClockState();
+}
+
+class _LiveClockState extends State<_LiveClock> {
+  late Timer _timer;
+  DateTime _now = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || !TickerMode.valuesOf(context).enabled) return;
+      setState(() => _now = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hm = DateFormat('HH:mm').format(_now);
+    final ss = DateFormat('ss').format(_now);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(hm,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 46,
+              height: 1,
+              fontWeight: FontWeight.w900,
+              letterSpacing: -1.5,
+              fontFeatures: [FontFeature.tabularFigures()],
+            )),
+        const SizedBox(width: 4),
+        Text(ss,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.55),
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            )),
+      ],
+    );
+  }
+}
+
+class _BlinkDot extends StatefulWidget {
+  final Color color;
+  final bool blink;
+  const _BlinkDot({required this.color, required this.blink});
+
+  @override
+  State<_BlinkDot> createState() => _BlinkDotState();
+}
+
+class _BlinkDotState extends State<_BlinkDot> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(covariant _BlinkDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync();
+  }
+
+  void _sync() {
+    if (widget.blink && !reduceMotion(context)) {
+      if (!_c.isAnimating) _c.repeat(reverse: true);
+    } else {
+      _c.value = 1;
     }
   }
 
   @override
-  bool shouldRepaint(covariant _CompletedRipplePainter oldDelegate) {
-    return oldDelegate.progress != progress;
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: Tween(begin: 0.3, end: 1.0).animate(_c),
+      child: Container(width: 7, height: 7, decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle)),
+    );
+  }
+}
+
+class _TimeTile extends StatelessWidget {
+  final String label, value, hint;
+  final IconData icon;
+  final bool done;
+
+  const _TimeTile({required this.label, required this.value, required this.hint, required this.icon, required this.done});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(color: AppColors.surface.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+      ),
+      child: Row(
+        children: [
+          AnimatedContainer(
+            duration: AppMotion.medium,
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: done ? const Color(0xFF34D399).withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(done ? Icons.check_rounded : icon, color: done ? const Color(0xFF34D399) : Colors.white70, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1)),
+                AnimatedSwitcher(
+                  duration: AppMotion.medium,
+                  child: Text(value,
+                      key: ValueKey(value),
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: 0.3)),
+                ),
+                Text(hint,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.55), fontSize: 10.5, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Ring showing time on site against the 9h shift (8h work + 1h break).
+/// Past 9h the ring keeps going in violet to visualise overtime.
+class _ShiftRing extends StatefulWidget {
+  final DateTime? checkIn, checkOut;
+  final double size;
+  const _ShiftRing({required this.checkIn, required this.checkOut, this.size = 118});
+
+  @override
+  State<_ShiftRing> createState() => _ShiftRingState();
+}
+
+class _ShiftRingState extends State<_ShiftRing> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTimer();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ShiftRing oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncTimer();
+  }
+
+  void _syncTimer() {
+    final live = widget.checkIn != null && widget.checkOut == null;
+    if (live && _timer == null) {
+      _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (mounted && TickerMode.valuesOf(context).enabled) setState(() {});
+      });
+    } else if (!live) {
+      _timer?.cancel();
+      _timer = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inT = widget.checkIn;
+    final span = inT == null ? Duration.zero : (widget.checkOut ?? DateTime.now()).difference(inT);
+    final ratio = span.inSeconds / kShiftSpan.inSeconds;
+    final over = span > kShiftSpan;
+    final work = span - kBreak;
+
+    return SizedBox.square(
+      dimension: widget.size,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: ratio.clamp(0.0, 2.0)),
+        duration: const Duration(milliseconds: 1400),
+        curve: AppMotion.emphasized,
+        builder: (context, v, _) {
+          return CustomPaint(
+            painter: _RingPainter(v),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    inT == null ? '0h' : formatDuration(span),
+                    style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    inT == null
+                        ? 'of 9h shift'
+                        : over
+                            ? '+${formatDuration(span - kShiftSpan)} OT'
+                            : '${formatDuration(work.isNegative ? Duration.zero : work)} work',
+                    style: TextStyle(
+                      color: over ? const Color(0xFFC4B5FD) : Colors.white.withValues(alpha: 0.6),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  final double value; // 1.0 == 9h; >1 is overtime
+  const _RingPainter(this.value);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = size.width * 0.085;
+    final rect = Rect.fromCircle(center: size.center(Offset.zero), radius: size.width / 2 - stroke / 2);
+    const start = -math.pi / 2;
+
+    canvas.drawArc(
+      rect,
+      0,
+      2 * math.pi,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..color = Colors.white.withValues(alpha: 0.12),
+    );
+
+    // Break marker at 8/9 of the ring ("work done" point).
+    const markA = start + 2 * math.pi * (8 / 9);
+    canvas.drawArc(
+      rect,
+      markA - 0.015,
+      0.03,
+      false,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke * 1.25
+        ..color = Colors.white.withValues(alpha: 0.35),
+    );
+
+    final main = value.clamp(0.0, 1.0);
+    if (main > 0) {
+      canvas.drawArc(
+        rect,
+        start,
+        2 * math.pi * main,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = stroke
+          ..shader = SweepGradient(
+            colors: [AppColors.amber, AppColors.coral, const Color(0xFF34D399)],
+            transform: const GradientRotation(-math.pi / 2),
+          ).createShader(rect),
+      );
+    }
+    final ot = (value - 1).clamp(0.0, 1.0);
+    if (ot > 0) {
+      canvas.drawArc(
+        rect.deflate(stroke * 1.2),
+        start,
+        2 * math.pi * ot,
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = stroke * 0.6
+          ..color = const Color(0xFFA78BFA),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter old) => old.value != value;
+}
+
+// =============================================================================
+// Main action
+// =============================================================================
+
+/// Simple, friendly primary action: "slide to check in / out".
+/// One pill, one thumb. Sliding prevents accidental check-ins; a tap on the
+/// thumb works too. Only the label shimmer animates (single controller).
+class _AttendanceOrb extends StatefulWidget {
+  final bool isCheckIn;
+  final String address;
+  final VoidCallback onTap;
+  final VoidCallback onLocationTap;
+
+  const _AttendanceOrb({
+    super.key,
+    required this.isCheckIn,
+    required this.address,
+    required this.onTap,
+    required this.onLocationTap,
+  });
+
+  @override
+  State<_AttendanceOrb> createState() => _AttendanceOrbState();
+}
+
+class _AttendanceOrbState extends State<_AttendanceOrb> with TickerProviderStateMixin {
+  late final AnimationController _shine = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200));
+  late final AnimationController _thumb = AnimationController(vsync: this, duration: const Duration(milliseconds: 380));
+  double _drag = 0; // 0..1
+  double _backFrom = 0;
+  bool _dragging = false;
+  bool _fired = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _thumb.addListener(() {
+      if (!_dragging) setState(() => _drag = _backFrom * (1 - Curves.easeOutBack.transform(_thumb.value)).clamp(0.0, 1.0));
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (reduceMotion(context)) {
+      _shine.stop();
+    } else if (!_shine.isAnimating) {
+      _shine.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _shine.dispose();
+    _thumb.dispose();
+    super.dispose();
+  }
+
+  Future<void> _complete() async {
+    if (_fired) return;
+    _fired = true;
+    HapticFeedback.mediumImpact();
+    setState(() => _drag = 1);
+    await Future.delayed(const Duration(milliseconds: 180));
+    widget.onTap();
+    // Spring back once the sheet is up.
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (!mounted) return;
+    _animateBack();
+    _fired = false;
+  }
+
+  void _animateBack() {
+    _backFrom = _drag;
+    _thumb.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final checkIn = widget.isCheckIn;
+    final color = checkIn ? AppColors.red : AppColors.success;
+    final gradient = checkIn ? AppGradients.brand : AppGradients.checkout;
+    final label = checkIn ? 'Slide to check in' : 'Slide to check out';
+    const h = 68.0, pad = 6.0;
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            Text(checkIn ? 'Ready to start your day?' : 'Wrapping up for today?',
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: -0.2)),
+            const Spacer(),
+            Text(checkIn ? '☀️' : '🌙', style: const TextStyle(fontSize: 18)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        LayoutBuilder(builder: (context, c) {
+          final travel = c.maxWidth - h;
+          final x = travel * _drag;
+          return Container(
+            height: h,
+            decoration: BoxDecoration(
+              gradient: gradient,
+              borderRadius: BorderRadius.circular(h / 2),
+              boxShadow: AppShadows.glow(color, strength: 0.35),
+            ),
+            child: Stack(
+              children: [
+                // Progress fill behind the thumb.
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: x + h,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(color: AppColors.surface.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(h / 2),
+                    ),
+                  ),
+                ),
+                // Shimmering label + chevrons (fade out as you slide).
+                Positioned.fill(
+                  child: Opacity(
+                    opacity: (1 - _drag * 1.6).clamp(0.0, 1.0),
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: h * 0.6),
+                      child: Center(
+                        child: RepaintBoundary(
+                          child: AnimatedBuilder(
+                            animation: _shine,
+                            builder: (context, child) => ShaderMask(
+                              blendMode: BlendMode.srcIn,
+                              shaderCallback: (r) => LinearGradient(
+                                begin: Alignment(-1.0 + _shine.value * 3 - 0.5, 0),
+                                end: Alignment(-1.0 + _shine.value * 3 + 0.5, 0),
+                                colors: [
+                                  Colors.white.withValues(alpha: 0.65),
+                                  Colors.white,
+                                  Colors.white.withValues(alpha: 0.65)
+                                ],
+                              ).createShader(r),
+                              child: child,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(label,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 0.2)),
+                                const SizedBox(width: 6),
+                                const Icon(Icons.keyboard_double_arrow_right_rounded, color: Colors.white, size: 22),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // Thumb.
+                Positioned(
+                  left: x + pad,
+                  top: pad,
+                  child: GestureDetector(
+                    onTap: _complete,
+                    onHorizontalDragStart: (_) {
+                      _thumb.stop();
+                      setState(() => _dragging = true);
+                    },
+                    onHorizontalDragUpdate: (d) {
+                      setState(() => _drag = (_drag + d.delta.dx / travel).clamp(0.0, 1.0));
+                      if (_drag >= 0.98) _complete();
+                    },
+                    onHorizontalDragEnd: (_) {
+                      _dragging = false;
+                      if (_drag > 0.8) {
+                        _complete();
+                      } else {
+                        _animateBack();
+                      }
+                    },
+                    child: Container(
+                      width: h - pad * 2,
+                      height: h - pad * 2,
+                      decoration: BoxDecoration(color: AppColors.surface,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(color: AppColors.text.withValues(alpha: 0.18), blurRadius: 12, offset: const Offset(0, 4))
+                        ],
+                      ),
+                      child: AnimatedSwitcher(
+                        duration: AppMotion.fast,
+                        child: Icon(
+                          _drag > 0.8 ? Icons.check_rounded : (checkIn ? Icons.fingerprint_rounded : Icons.logout_rounded),
+                          key: ValueKey(_drag > 0.8),
+                          color: color,
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+        const SizedBox(height: 12),
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onLocationTap,
+          child: Row(
+            children: [
+              Icon(Icons.my_location_rounded, size: 14, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(widget.address,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
+              ),
+              Icon(Icons.refresh_rounded, size: 14, color: AppColors.textFaint),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CompletedCard extends StatelessWidget {
+  final DateTime? checkIn, checkOut;
+  const _CompletedCard({super.key, required this.checkIn, required this.checkOut});
+
+  @override
+  Widget build(BuildContext context) {
+    final span = (checkIn != null && checkOut != null) ? checkOut!.difference(checkIn!) : Duration.zero;
+    final work = span - kBreak;
+    final overtime = span > kShiftSpan;
+
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFECFDF5), Colors.white],
+        ),
+        border: Border.all(color: const Color(0xFFA7F3D0)),
+        boxShadow: AppShadows.glow(AppColors.success, strength: 0.12),
+      ),
+      child: Column(
+        children: [
+          const _DrawnCheck(size: 84),
+          const SizedBox(height: 14),
+          const Text('Shift complete — great work!',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: -0.3)),
+          const SizedBox(height: 4),
+          Text('See you tomorrow. Your attendance is safely recorded.',
+              textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              _MiniStat(label: 'On site', value: formatDuration(span), color: AppColors.info),
+              const SizedBox(width: 10),
+              _MiniStat(label: 'Work (−1h break)', value: formatDuration(work), color: AppColors.success),
+              const SizedBox(width: 10),
+              _MiniStat(
+                label: 'Overtime',
+                value: overtime ? '+${formatDuration(span - kShiftSpan)}' : '—',
+                color: AppColors.overtime,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GradientButton extends StatelessWidget {
+  final LinearGradient gradient;
+  final Color glow;
+  final bool loading;
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _GradientButton({
+    required this.gradient,
+    required this.glow,
+    required this.loading,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      pressedScale: 0.97,
+      onTap: onTap,
+      child: AnimatedOpacity(
+        duration: AppMotion.fast,
+        opacity: onTap == null && !loading ? 0.6 : 1,
+        child: Container(
+          height: 56,
+          decoration: BoxDecoration(
+            gradient: gradient,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: AppShadows.glow(glow, strength: 0.35),
+          ),
+          child: Center(
+            child: AnimatedSwitcher(
+              duration: AppMotion.fast,
+              child: loading
+                  ? const SizedBox(
+                      key: ValueKey('l'),
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.4),
+                    )
+                  : Row(
+                      key: const ValueKey('t'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(icon, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Text(label, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final String label, value;
+  final Color color;
+  const _MiniStat({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.07), borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          children: [
+            Text(value, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 15)),
+            const SizedBox(height: 2),
+            Text(label,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: AppColors.textMuted, fontSize: 10.5, fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Check mark that draws itself once.
+class _DrawnCheck extends StatelessWidget {
+  final double size;
+  const _DrawnCheck({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 1100),
+      curve: Curves.easeOutCubic,
+      builder: (context, v, _) => Transform.scale(
+        scale: 0.6 + 0.4 * Curves.elasticOut.transform(v.clamp(0.0, 1.0)),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: AppGradients.checkout,
+            boxShadow: AppShadows.glow(AppColors.success),
+          ),
+          child: CustomPaint(painter: _CheckPainter(v)),
+        ),
+      ),
+    );
+  }
+}
+
+class _CheckPainter extends CustomPainter {
+  final double t;
+  const _CheckPainter(this.t);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(size.width * 0.28, size.height * 0.52)
+      ..lineTo(size.width * 0.44, size.height * 0.67)
+      ..lineTo(size.width * 0.73, size.height * 0.37);
+    final metric = path.computeMetrics().first;
+    canvas.drawPath(
+      metric.extractPath(0, metric.length * t),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = size.width * 0.09
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..color = Colors.white,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CheckPainter old) => old.t != t;
+}
+
+class _PulsingPin extends StatefulWidget {
+  final bool small;
+  const _PulsingPin({this.small = false});
+
+  @override
+  State<_PulsingPin> createState() => _PulsingPinState();
+}
+
+class _PulsingPinState extends State<_PulsingPin> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat();
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = widget.small ? 36.0 : 64.0;
+    return RepaintBoundary(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          AnimatedBuilder(
+            animation: _c,
+            builder: (context, _) => Container(
+              width: s * (0.4 + 0.6 * _c.value),
+              height: s * (0.4 + 0.6 * _c.value),
+              decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.red.withValues(alpha: 0.35 * (1 - _c.value))),
+            ),
+          ),
+          Container(
+            width: s * 0.42,
+            height: s * 0.42,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: AppGradients.brand,
+              border: Border.all(color: Colors.white, width: 2),
+            ),
+            child: Icon(Icons.person_rounded, color: Colors.white, size: s * 0.24),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// Badges, quick actions, announcements
+// =============================================================================
+
+class _BadgeStrip extends StatelessWidget {
+  final VoidCallback onTap;
+  const _BadgeStrip({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<BadgeSummary>(
+      valueListenable: ApiService.badgesNotifier,
+      builder: (context, s, _) {
+        final next = s.nextFor('STREAK') ?? s.nextFor('OVERTIME');
+        return Pressable(
+          pressedScale: 0.98,
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(26),
+              gradient: AppGradients.ink,
+              boxShadow: AppShadows.glow(AppColors.ink, strength: 0.25),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.emoji_events_rounded, color: AppColors.amber, size: 20),
+                    const SizedBox(width: 8),
+                    const Text('Achievements', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16)),
+                    const Spacer(),
+                    Text('${s.earnedCount}/${s.badges.isEmpty ? 8 : s.badges.length}',
+                        style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w800, fontSize: 12.5)),
+                    const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 70,
+                  child: s.isEmpty
+                      ? Row(
+                          children: List.generate(
+                            4,
+                            (i) => const Padding(
+                              padding: EdgeInsets.only(right: 10),
+                              child: Opacity(opacity: 0.15, child: Shimmer(height: 62, width: 62, radius: 31)),
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: s.badges.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 6),
+                          itemBuilder: (_, i) => BadgeMedal(badge: s.badges[i], size: 70, showProgress: false),
+                        ),
+                ),
+                if (next != null) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Next: ${next.name} · ${next.remaining} ${next.isStreak ? 'weekdays' : 'overtime days'} to go',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      Text('${(next.percent * 100).round()}%',
+                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w900)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: next.percent),
+                      duration: const Duration(milliseconds: 1200),
+                      curve: AppMotion.emphasized,
+                      builder: (context, v, _) => LinearProgressIndicator(
+                        value: v,
+                        minHeight: 6,
+                        backgroundColor: AppColors.surface.withValues(alpha: 0.1),
+                        valueColor: AlwaysStoppedAnimation(next.isStreak ? const Color(0xFFFF7A1A) : const Color(0xFFA78BFA)),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _QuickActions extends StatelessWidget {
+  final VoidCallback onBadges;
+  const _QuickActions({required this.onBadges});
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      _QA('History', Icons.receipt_long_rounded, const [Color(0xFF34D399), Color(0xFF059669)],
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AttendanceLogScreen()))),
+      _QA('Calendar', Icons.calendar_month_rounded, const [Color(0xFF818CF8), Color(0xFF4F46E5)],
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarScreen()))),
+      _QA('Badges', Icons.military_tech_rounded, const [Color(0xFFFFC94D), Color(0xFFFF7A1A)], onBadges),
+      _QA('Leave', Icons.beach_access_rounded, [const Color(0xFFFF8A80), AppColors.red],
+          () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LeaveRequestScreen()))),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Quick access', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.3)),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            for (final it in items)
+              Expanded(
+                child: Pressable(
+                  onTap: it.onTap,
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: it.colors),
+                          boxShadow: AppShadows.glow(it.colors.last, strength: 0.28),
+                        ),
+                        child: Stack(
+                          children: [
+                            // Glossy highlight for a more "app icon" look.
+                            Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              height: 28,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [Colors.white.withValues(alpha: 0.28), Colors.white.withValues(alpha: 0)],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Center(child: Icon(it.icon, color: Colors.white, size: 27)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(it.label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _QA {
+  final String label;
+  final IconData icon;
+  final List<Color> colors;
+  final VoidCallback onTap;
+  _QA(this.label, this.icon, this.colors, this.onTap);
+}
+
+class _AnnStyle {
+  final Color color;
+  final LinearGradient gradient;
+  final IconData icon;
+  const _AnnStyle(this.color, this.gradient, this.icon);
+
+  static _AnnStyle of(String category) {
+    switch (category) {
+      case 'IMPORTANT':
+        return _AnnStyle(AppColors.red, AppGradients.brand, Icons.priority_high_rounded);
+      case 'EVENT':
+        return const _AnnStyle(
+            AppColors.info, LinearGradient(colors: [Color(0xFF818CF8), Color(0xFF4F46E5)]), Icons.celebration_rounded);
+      case 'MAINTENANCE':
+        return const _AnnStyle(
+            AppColors.warning, LinearGradient(colors: [Color(0xFFFCD34D), Color(0xFFD97706)]), Icons.build_rounded);
+      default:
+        return const _AnnStyle(
+            AppColors.success, LinearGradient(colors: [Color(0xFF6EE7B7), Color(0xFF059669)]), Icons.campaign_rounded);
+    }
+  }
+}
+
+class _AnnouncementCard extends StatelessWidget {
+  final String title, category, date, content;
+  final VoidCallback onTap;
+
+  const _AnnouncementCard({
+    required this.title,
+    required this.category,
+    required this.date,
+    required this.content,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final style = _AnnStyle.of(category);
+    return Pressable(
+      pressedScale: 0.98,
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: AppColors.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.line),
+          boxShadow: AppShadows.soft,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                gradient: style.gradient,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: AppShadows.glow(style.color, strength: 0.22),
+              ),
+              child: Icon(style.icon, color: Colors.white, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(category,
+                          style: TextStyle(color: style.color, fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
+                      const Spacer(),
+                      Text(date, style: TextStyle(color: AppColors.textFaint, fontSize: 11, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, height: 1.3)),
+                  const SizedBox(height: 4),
+                  Text(content,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12.5, color: AppColors.textMuted, height: 1.4)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyAnnouncements extends StatelessWidget {
+  const _EmptyAnnouncements();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        padding: const EdgeInsets.all(26),
+        decoration: BoxDecoration(color: AppColors.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.line),
+        ),
+        child: Column(
+          children: [
+            Icon(Icons.mark_email_read_rounded, color: AppColors.textFaint, size: 34),
+            const SizedBox(height: 8),
+            const Text('You are all caught up', style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 2),
+            Text('No announcements yet.', style: TextStyle(color: AppColors.textMuted, fontSize: 12.5)),
+          ],
+        ),
+      ),
+    );
   }
 }

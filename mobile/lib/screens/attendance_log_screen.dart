@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
 
 class AttendanceLogScreen extends StatefulWidget {
   const AttendanceLogScreen({super.key});
@@ -122,27 +123,27 @@ class _AttendanceLogScreenState extends State<AttendanceLogScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF9FAFB),
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Attendance Log',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF0F172A)),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.text),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.surface,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF0F172A)),
+        iconTheme: IconThemeData(color: AppColors.text),
         centerTitle: false,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFDC2626)))
+          ? Center(child: CircularProgressIndicator(color: AppColors.red))
           : _logs.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Icon(Icons.history_rounded, size: 48, color: Color(0xFF94A3B8)),
-                      SizedBox(height: 12),
-                      Text('No attendance records found', style: TextStyle(color: Color(0xFF64748B), fontSize: 14)),
+                    children: [
+                      Icon(Icons.history_rounded, size: 48, color: AppColors.textFaint),
+                      const SizedBox(height: 12),
+                      Text('No attendance records found', style: TextStyle(color: AppColors.textMuted, fontSize: 14)),
                     ],
                   ),
                 )
@@ -174,10 +175,9 @@ class _AttendanceLogScreenState extends State<AttendanceLogScreen> {
                         },
                         child: Container(
                           padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
+                          decoration: BoxDecoration(color: AppColors.surface,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFE2E8F0)),
+                            border: Border.all(color: AppColors.line),
                             boxShadow: const [
                               BoxShadow(
                                 color: Color(0x05000000),
@@ -195,14 +195,14 @@ class _AttendanceLogScreenState extends State<AttendanceLogScreen> {
                                 children: [
                                   Row(
                                     children: [
-                                      const Icon(Icons.calendar_today_rounded, size: 16, color: Color(0xFFDC2626)),
+                                      Icon(Icons.calendar_today_rounded, size: 16, color: AppColors.red),
                                       const SizedBox(width: 8),
                                       Text(
                                         _formatDate(dateStr),
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 14,
-                                          color: Color(0xFF0F172A),
+                                          color: AppColors.text,
                                         ),
                                       ),
                                     ],
@@ -229,7 +229,7 @@ class _AttendanceLogScreenState extends State<AttendanceLogScreen> {
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                              Divider(height: 1, color: AppColors.line),
                               const SizedBox(height: 12),
 
                               // Check In & Check Out Times
@@ -250,11 +250,11 @@ class _AttendanceLogScreenState extends State<AttendanceLogScreen> {
                                         Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            const Text('Check In', style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                                            Text('Check In', style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
                                             const SizedBox(height: 2),
                                             Text(
                                               _formatTime(checkIn),
-                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.text),
                                             ),
                                           ],
                                         ),
@@ -267,20 +267,20 @@ class _AttendanceLogScreenState extends State<AttendanceLogScreen> {
                                         Container(
                                           padding: const EdgeInsets.all(10),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFFFEF2F2),
+                                            color: AppColors.redSoft,
                                             borderRadius: BorderRadius.circular(12),
                                           ),
-                                          child: const Icon(Icons.logout_rounded, size: 20, color: Color(0xFFEF4444)),
+                                          child: Icon(Icons.logout_rounded, size: 20, color: AppColors.red),
                                         ),
                                         const SizedBox(width: 10),
                                         Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            const Text('Check Out', style: TextStyle(fontSize: 11, color: Color(0xFF64748B), fontWeight: FontWeight.w500)),
+                                            Text('Check Out', style: TextStyle(fontSize: 11, color: AppColors.textMuted, fontWeight: FontWeight.w500)),
                                             const SizedBox(height: 2),
                                             Text(
                                               _formatTime(checkOut),
-                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF0F172A)),
+                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.text),
                                             ),
                                           ],
                                         ),

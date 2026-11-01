@@ -1,5 +1,11 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/aurora_background.dart';
+import '../widgets/celebration.dart';
+import '../widgets/motion.dart';
+import '../widgets/tiki_mascot.dart';
 import 'main_navigation_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -9,70 +15,108 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
+enum _Field { none, email, password }
+
 class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _emailFocus = FocusNode();
+  final _passwordFocus = FocusNode();
+
   bool _isLoading = false;
   bool _obscurePassword = true;
   String? _errorMessage;
+  _Field _field = _Field.none;
+  TikiMood _mood = TikiMood.idle;
+  int _shakeSeed = 0;
 
-  late AnimationController _animController;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
-  late Animation<Offset> _slideAnimation;
+  late final AnimationController _shake = AnimationController(vsync: this, duration: const Duration(milliseconds: 450));
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 750),
-    );
+    void sync() {
+      final f = _passwordFocus.hasFocus
+          ? _Field.password
+          : _emailFocus.hasFocus
+              ? _Field.email
+              : _Field.none;
+      if (f != _field) setState(() => _field = f);
+    }
 
-    _fadeAnimation = CurvedAnimation(
-      parent: _animController,
-      curve: const Interval(0.0, 0.8, curve: Curves.easeOut),
-    );
-
-    _scaleAnimation = Tween<double>(begin: 0.90, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animController,
-        curve: const Interval(0.1, 0.9, curve: Curves.easeOutBack),
-      ),
-    );
-
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _animController,
-        curve: const Interval(0.1, 1.0, curve: Curves.fastOutSlowIn),
-      ),
-    );
-
-    _animController.forward();
+    _emailFocus.addListener(sync);
+    _passwordFocus.addListener(sync);
+    _emailController.addListener(() {
+      if (_field == _Field.email) setState(() {});
+    });
   }
 
   @override
   void dispose() {
-    _animController.dispose();
+    _shake.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
-  void _handleLogin() async {
+  Offset get _look {
+    switch (_field) {
+      case _Field.email:
+        // Eyes follow the caret as the user types.
+        final p = math.min(_emailController.text.length / 26, 1.0);
+        return Offset(-0.9 + p * 1.8, 1);
+      case _Field.password:
+        return const Offset(0, 0.6);
+      case _Field.none:
+        return Offset.zero;
+    }
+  }
+
+  (String, String) get _bubble {
+    if (_mood == TikiMood.happy) return ('Yay! Welcome back! 🎉', "Let's make today count!");
+    if (_mood == TikiMood.sad) return ("Hmm, that didn't work 😢", 'Double-check and try again?');
+    if (_field == _Field.password) {
+      return _obscurePassword
+          ? ("I'm not looking! 🙈", 'Your secret is safe.')
+          : ('Just a tiny peek… 👀', 'Oops, I saw nothing!');
+    }
+    if (_field == _Field.email) return ('Ooh, who are you?', 'Let me read that…');
+    final h = DateTime.now().hour;
+    final hi = h < 11
+        ? 'Good morning ☀️'
+        : h < 15
+            ? 'Good afternoon 🌤️'
+            : h < 19
+                ? 'Good evening 🌇'
+                : 'Working late? 🌙';
+    return (hi, "I'm Tiki, your attendance buddy!");
+  }
+
+  void _onEdit() {
+    if (_mood == TikiMood.sad || _errorMessage != null) {
+      setState(() {
+        _mood = TikiMood.idle;
+        _errorMessage = null;
+      });
+    }
+  }
+
+  Future<void> _handleLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
       setState(() {
         _errorMessage = 'Please enter your email and password.';
+        _mood = TikiMood.sad;
       });
+      _shake.forward(from: 0);
       return;
     }
 
+    FocusScope.of(context).unfocus();
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -80,297 +124,312 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
     try {
       await ApiService.login(email, password);
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const MainNavigationScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.95, end: 1.0).animate(
-                    CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-                  ),
-                  child: child,
-                ),
-              );
-            },
-            transitionDuration: const Duration(milliseconds: 400),
+      if (!mounted) return;
+      setState(() => _mood = TikiMood.happy);
+      // Let Tiki celebrate for a moment.
+      await Future.delayed(const Duration(milliseconds: 1200));
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const MainNavigationScreen(),
+          transitionsBuilder: (_, animation, __, child) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale:
+                  Tween<double>(begin: 0.96, end: 1.0).animate(CurvedAnimation(parent: animation, curve: AppMotion.emphasized)),
+              child: child,
+            ),
           ),
-        );
-      }
+          transitionDuration: const Duration(milliseconds: 500),
+        ),
+      );
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _mood = TikiMood.sad;
+        _isLoading = false;
+        _shakeSeed++;
       });
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      _shake.forward(from: 0);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final (line1, line2) = _bubble;
+    final topPad = MediaQuery.paddingOf(context).top;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
-        child: Center(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: ScaleTransition(
-              scale: _scaleAnimation,
-              child: SlideTransition(
-                position: _slideAnimation,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Top Red Brand Header Card with Subtle Shadow
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFEF4444), Color(0xFFDC2626), Color(0xFFB91C1C)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+      backgroundColor: AppColors.bg,
+      resizeToAvoidBottomInset: true,
+      body: Stack(
+        children: [
+          // Hero: aurora + floating doodles.
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: MediaQuery.sizeOf(context).height * 0.5,
+            child: const AuroraBackground(
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(40)),
+              child: Stack(children: [
+                Positioned.fill(child: CustomPaint(painter: DotGridPainter())),
+                Positioned.fill(child: FloatingDoodles()),
+              ]),
+            ),
+          ),
+          SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(22, topPad + 18, 22, 28),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Column(
+                  children: [
+                    FadeSlideIn(
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(7),
+                            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14)),
+                            child: Image.asset('assets/fujitsu.png', width: 26, height: 26, cacheWidth: 96),
                           ),
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFDC2626).withValues(alpha: 0.35),
-                              blurRadius: 24,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          children: [
-                            // White Logo Box with Rounded Border
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.08),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Image.asset(
-                                'assets/fujitsu.png',
-                                height: 42,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'FID-A Mobile',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Fujitsu Office Attendance System',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.white.withValues(alpha: 0.9),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 28),
-
-                      // Main Form Card (White)
-                      Container(
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF64748B).withValues(alpha: 0.08),
-                              blurRadius: 20,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Sign In',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF0F172A),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Sign in to your account for attendance check-in',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF64748B),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-
-                            if (_errorMessage != null) ...[
-                              AnimatedContainer(
-                                duration: const Duration(milliseconds: 300),
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFEF2F2),
-                                  border: Border.all(color: const Color(0xFFFCA5A5)),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 20),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        _errorMessage!,
-                                        style: const TextStyle(color: Color(0xFF991B1B), fontSize: 13, fontWeight: FontWeight.w500),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 16),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('FID-A', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 17)),
+                              Text('FUJITSU OFFICE ATTENDANCE',
+                                  style: TextStyle(
+                                      color: AppColors.coral, fontWeight: FontWeight.w800, fontSize: 9.5, letterSpacing: 1.4)),
                             ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    AnimatedSize(
+                      duration: AppMotion.medium,
+                      curve: AppMotion.emphasized,
+                      child: SizedBox(height: keyboard ? 8 : 34),
+                    ),
 
-                            // Email Field
-                            const Text(
-                              'Email Address',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
-                            ),
-                            const SizedBox(height: 6),
-                            TextField(
-                              controller: _emailController,
-                              keyboardType: TextInputType.emailAddress,
-                              style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
-                              decoration: InputDecoration(
-                                hintText: 'name@company.com',
-                                hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-                                prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFFDC2626), size: 20),
-                                filled: true,
-                                fillColor: const Color(0xFFF8FAFC),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    // Mascot + speech bubble.
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 120),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          TikiMascot(
+                            size: keyboard ? 110 : 150,
+                            look: _look,
+                            cover: _field == _Field.password,
+                            peek: !_obscurePassword,
+                            mood: _mood,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.only(bottom: keyboard ? 50 : 76),
+                              child: AnimatedSwitcher(
+                                duration: AppMotion.medium,
+                                transitionBuilder: (child, a) => FadeTransition(
+                                  opacity: a,
+                                  child: ScaleTransition(
+                                    scale: Tween(begin: 0.9, end: 1.0)
+                                        .animate(CurvedAnimation(parent: a, curve: Curves.easeOutBack)),
+                                    alignment: Alignment.bottomLeft,
+                                    child: child,
+                                  ),
                                 ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(color: Color(0xFFDC2626), width: 1.8),
+                                child: Container(
+                                  key: ValueKey(line1),
+                                  padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+                                  decoration: BoxDecoration(color: AppColors.surface,
+                                    borderRadius: const BorderRadius.only(
+                                      topLeft: Radius.circular(18),
+                                      topRight: Radius.circular(18),
+                                      bottomRight: Radius.circular(18),
+                                      bottomLeft: Radius.circular(4),
+                                    ),
+                                    boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 20, offset: Offset(0, 8))],
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(line1, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                                      const SizedBox(height: 2),
+                                      Text(line2, style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
+                          ),
+                        ],
+                      ),
+                    ),
 
-                            const SizedBox(height: 16),
-
-                            // Password Field
-                            const Text(
-                              'Password',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF475569)),
-                            ),
-                            const SizedBox(height: 6),
-                            TextField(
-                              controller: _passwordController,
-                              obscureText: _obscurePassword,
-                              style: const TextStyle(color: Color(0xFF0F172A), fontSize: 14),
-                              decoration: InputDecoration(
-                                hintText: '••••••••',
-                                hintStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-                                prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFFDC2626), size: 20),
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                                    color: const Color(0xFF64748B),
-                                    size: 20,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    });
-                                  },
-                                ),
-                                filled: true,
-                                fillColor: const Color(0xFFF8FAFC),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                  borderSide: const BorderSide(color: Color(0xFFDC2626), width: 1.8),
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            // Submit Button
-                            SizedBox(
-                              width: double.infinity,
-                              height: 52,
-                              child: ElevatedButton(
-                                onPressed: _isLoading ? null : _handleLogin,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFDC2626),
-                                  disabledBackgroundColor: const Color(0xFFDC2626).withValues(alpha: 0.5),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  elevation: 3,
-                                  shadowColor: const Color(0xFFDC2626).withValues(alpha: 0.4),
-                                ),
-                                child: _isLoading
-                                    ? const SizedBox(
-                                        width: 24,
-                                        height: 24,
-                                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                      )
-                                    : const Text(
-                                        'Sign In',
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                          letterSpacing: 0.3,
+                    // Form card (shakes on error).
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 220),
+                      child: AnimatedBuilder(
+                        animation: _shake,
+                        builder: (context, child) {
+                          final v = _shake.value;
+                          return Transform.translate(offset: Offset(math.sin(v * math.pi * 6) * 10 * (1 - v), 0), child: child);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
+                          decoration: BoxDecoration(color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(30),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: AppColors.text.withValues(alpha: 0.12),
+                                  blurRadius: 40,
+                                  offset: const Offset(0, 18)),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Welcome back',
+                                  style: TextStyle(fontSize: 25, fontWeight: FontWeight.w900, letterSpacing: -0.6)),
+                              const SizedBox(height: 4),
+                              Text('Sign in to check in, keep your streak and collect badges.',
+                                  style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+                              AnimatedSize(
+                                duration: AppMotion.medium,
+                                curve: AppMotion.emphasized,
+                                child: _errorMessage == null
+                                    ? const SizedBox(width: double.infinity, height: 18)
+                                    : Container(
+                                        key: ValueKey(_shakeSeed),
+                                        width: double.infinity,
+                                        margin: const EdgeInsets.only(top: 16, bottom: 4),
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.redSoft,
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(color: const Color(0xFFFCA5A5)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.error_outline_rounded, color: AppColors.red, size: 18),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(_errorMessage!,
+                                                  style: TextStyle(
+                                                      color: AppColors.redDeep, fontSize: 12.5, fontWeight: FontWeight.w700)),
+                                            ),
+                                          ],
                                         ),
                                       ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 4),
+                              const Text('Email address', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: _emailController,
+                                focusNode: _emailFocus,
+                                keyboardType: TextInputType.emailAddress,
+                                textInputAction: TextInputAction.next,
+                                autofillHints: const [AutofillHints.username, AutofillHints.email],
+                                onChanged: (_) => _onEdit(),
+                                onSubmitted: (_) => _passwordFocus.requestFocus(),
+                                decoration: const InputDecoration(
+                                  hintText: 'name@company.com',
+                                  prefixIcon: Icon(Icons.alternate_email_rounded, size: 20),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              const Text('Password', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: _passwordController,
+                                focusNode: _passwordFocus,
+                                obscureText: _obscurePassword,
+                                textInputAction: TextInputAction.done,
+                                autofillHints: const [AutofillHints.password],
+                                onChanged: (_) => _onEdit(),
+                                onSubmitted: (_) => _handleLogin(),
+                                decoration: InputDecoration(
+                                  hintText: '••••••••',
+                                  prefixIcon: const Icon(Icons.lock_rounded, size: 20),
+                                  suffixIcon: IconButton(
+                                    icon: AnimatedSwitcher(
+                                      duration: AppMotion.fast,
+                                      child: Icon(
+                                        _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                        key: ValueKey(_obscurePassword),
+                                        size: 20,
+                                      ),
+                                    ),
+                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 22),
+                              Pressable(
+                                pressedScale: 0.97,
+                                onTap: _isLoading || _mood == TikiMood.happy ? null : _handleLogin,
+                                child: Container(
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    gradient: _mood == TikiMood.happy ? AppGradients.checkout : AppGradients.brand,
+                                    borderRadius: BorderRadius.circular(18),
+                                    boxShadow: AppShadows.glow(_mood == TikiMood.happy ? AppColors.success : AppColors.red),
+                                  ),
+                                  child: Center(
+                                    child: AnimatedSwitcher(
+                                      duration: AppMotion.fast,
+                                      child: _mood == TikiMood.happy
+                                          ? const Text("Let's go! 🎉",
+                                              key: ValueKey('ok'),
+                                              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900))
+                                          : _isLoading
+                                              ? const SizedBox(
+                                                  key: ValueKey('l'),
+                                                  width: 22,
+                                                  height: 22,
+                                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.4),
+                                                )
+                                              : const Row(
+                                                  key: ValueKey('t'),
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Text('Sign in',
+                                                        style: TextStyle(
+                                                            color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+                                                    SizedBox(width: 8),
+                                                    Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
+                                                  ],
+                                                ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Center(
+                                child: Text('You stay signed in unless the app is unused for 30 days.',
+                                    textAlign: TextAlign.center, style: TextStyle(color: AppColors.textFaint, fontSize: 11.5)),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-        ),
+          if (_mood == TikiMood.happy) const Positioned.fill(child: ConfettiBurst()),
+        ],
       ),
     );
   }
 }
-

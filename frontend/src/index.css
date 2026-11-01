@@ -1,3 +1,5 @@
+@import './theme-tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -5,7 +7,9 @@
 @layer base {
   body {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    @apply antialiased bg-slate-50 text-slate-900 selection:bg-red-500 selection:text-white;
+    @apply antialiased selection:bg-red-500 selection:text-white;
+    background-color: rgb(var(--bg));
+    color: rgb(var(--text));
   }
 }
 
@@ -96,3 +100,291 @@
 }
 
 
+
+/* ------------------------------------------------------------------ */
+/* Design refresh: aurora surfaces, medals, confetti, motion helpers   */
+/* All infinite animations only touch transform/opacity (GPU friendly) */
+/* ------------------------------------------------------------------ */
+
+.aurora {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: radial-gradient(120% 120% at 0% 0%, rgb(var(--ink3)) 0%, rgb(var(--ink)) 60%);
+}
+.aurora::before,
+.aurora::after,
+.aurora > .aurora-blob {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  width: 60%;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  pointer-events: none;
+  will-change: transform;
+}
+.aurora::before {
+  top: -30%;
+  left: -10%;
+  background: radial-gradient(circle, rgb(var(--aurora-1) / 0.55), transparent 65%);
+  animation: auroraA 16s ease-in-out infinite alternate;
+}
+.aurora::after {
+  bottom: -40%;
+  right: -10%;
+  background: radial-gradient(circle, rgb(var(--aurora-2) / 0.45), transparent 65%);
+  animation: auroraB 19s ease-in-out infinite alternate;
+}
+.aurora > .aurora-blob {
+  top: 10%;
+  right: 20%;
+  width: 40%;
+  background: radial-gradient(circle, rgb(var(--aurora-3) / 0.35), transparent 65%);
+  animation: auroraA 22s ease-in-out infinite alternate-reverse;
+}
+@keyframes auroraA {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(18%, 12%, 0) scale(1.15); }
+}
+@keyframes auroraB {
+  from { transform: translate3d(0, 0, 0) scale(1.1); }
+  to { transform: translate3d(-16%, -10%, 0) scale(0.95); }
+}
+
+.dot-grid-dark {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+@keyframes medalFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.medal-float { animation: medalFloat 3.2s ease-in-out infinite; }
+
+@keyframes medalShine {
+  0% { transform: translateX(-120%) rotate(25deg); }
+  60%, 100% { transform: translateX(220%) rotate(25deg); }
+}
+.medal-shine {
+  position: absolute;
+  inset: -20% auto -20% 0;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+  animation: medalShine 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes flameFlicker {
+  0%, 100% { transform: scale(1, 1) skewX(0deg); }
+  25% { transform: scale(0.97, 1.04) skewX(-2deg); }
+  50% { transform: scale(1.02, 0.97) skewX(1.5deg); }
+  75% { transform: scale(0.99, 1.03) skewX(-1deg); }
+}
+.flame-flicker { transform-origin: 50% 100%; animation: flameFlicker 1.4s ease-in-out infinite; }
+
+@keyframes confettiFall {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate3d(var(--dx), var(--dy), 0) rotate(var(--rot)); opacity: 0; }
+}
+.confetti-piece {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  animation: confettiFall var(--dur) cubic-bezier(0.15, 0.6, 0.35, 1) forwards;
+}
+
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.4); }
+  60% { opacity: 1; transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+.animate-pop-in { animation: popIn 0.7s cubic-bezier(0.2, 0, 0, 1) both; }
+
+@keyframes raysSpin { to { transform: rotate(360deg); } }
+.rays-spin { animation: raysSpin 18s linear infinite; }
+
+@keyframes progressGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.progress-grow { transform-origin: left; animation: progressGrow 1.1s cubic-bezier(0.2, 0, 0, 1) both; }
+
+.stagger > * { opacity: 0; animation: slideUp 0.5s cubic-bezier(0.2, 0, 0, 1) forwards; }
+.stagger > *:nth-child(1) { animation-delay: 0ms; }
+.stagger > *:nth-child(2) { animation-delay: 60ms; }
+.stagger > *:nth-child(3) { animation-delay: 120ms; }
+.stagger > *:nth-child(4) { animation-delay: 180ms; }
+.stagger > *:nth-child(5) { animation-delay: 240ms; }
+.stagger > *:nth-child(6) { animation-delay: 300ms; }
+.stagger > *:nth-child(7) { animation-delay: 360ms; }
+.stagger > *:nth-child(8) { animation-delay: 420ms; }
+.stagger > *:nth-child(n + 9) { animation-delay: 480ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------------------------- Tiki mascot ---------------------------- */
+@keyframes tikiBob {
+  0%, 100% { transform: translateY(0) rotate(-1.5deg); }
+  50% { transform: translateY(-6px) rotate(1.5deg); }
+}
+.tiki-bob { animation: tikiBob 3s ease-in-out infinite; }
+.tiki-bob .tiki-shadow { animation: tikiShadow 3s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes tikiShadow { 0%, 100% { transform: scaleX(1); opacity: 0.12; } 50% { transform: scaleX(0.85); opacity: 0.08; } }
+
+@keyframes tikiJump {
+  0% { transform: translateY(0) scale(1, 1); }
+  15% { transform: translateY(4px) scale(1.08, 0.92); }
+  40% { transform: translateY(-34px) scale(0.95, 1.06); }
+  60% { transform: translateY(-34px) rotate(8deg); }
+  80% { transform: translateY(0) scale(1.06, 0.94); }
+  100% { transform: translateY(0) scale(1, 1); }
+}
+.tiki-jump { animation: tikiJump 0.9s cubic-bezier(0.3, 0.7, 0.4, 1) infinite; }
+
+@keyframes tikiShake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  15% { transform: translateX(-10px) rotate(-6deg); }
+  30% { transform: translateX(9px) rotate(5deg); }
+  45% { transform: translateX(-7px) rotate(-4deg); }
+  60% { transform: translateX(5px) rotate(3deg); }
+  75% { transform: translateX(-2px) rotate(-1deg); }
+}
+.tiki-shake { animation: tikiShake 0.6s ease-in-out both; }
+
+@keyframes tikiRing {
+  0%, 100% { transform: rotate(0); }
+  20% { transform: rotate(-9deg); }
+  40% { transform: rotate(9deg); }
+  60% { transform: rotate(-6deg); }
+  80% { transform: rotate(6deg); }
+}
+.tiki-ring { animation: tikiRing 0.35s linear infinite; }
+
+@keyframes tikiBlink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95% { transform: scaleY(0.1); }
+}
+.tiki-blink { transform-box: fill-box; transform-origin: center; animation: tikiBlink 4.2s infinite; }
+
+@keyframes doodleFloat {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(var(--r0, -6deg)); }
+  50% { transform: translate3d(0, -14px, 0) rotate(var(--r1, 6deg)); }
+}
+.doodle { position: absolute; animation: doodleFloat var(--d, 6s) ease-in-out infinite; animation-delay: var(--delay, 0s); filter: drop-shadow(0 10px 18px rgba(0,0,0,0.25)); will-change: transform; }
+
+@keyframes steam { 0% { transform: translateY(2px); opacity: 0; } 40% { opacity: 1; } 100% { transform: translateY(-6px); opacity: 0; } }
+.steam path { animation: steam 2s ease-in-out infinite; }
+.steam path:nth-child(2) { animation-delay: 0.6s; }
+
+@keyframes bubbleIn { from { opacity: 0; transform: translateY(6px) scale(0.92); } to { opacity: 1; transform: none; } }
+.bubble-in { animation: bubbleIn 0.35s cubic-bezier(0.2, 0, 0, 1) both; }
+
+@keyframes cardShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); } 40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); } 80% { transform: translateX(3px); }
+}
+.card-shake { animation: cardShake 0.45s ease-in-out; }
+
+/* ---------------------------- Map pins ---------------------------- */
+.fid-pin { position: relative; display: flex; flex-direction: column; align-items: center; transition: transform 0.2s; }
+.fid-pin:hover { transform: translateY(-3px) scale(1.06); }
+.fid-pin-head {
+  width: 100%; aspect-ratio: 1; border-radius: 9999px; display: flex; align-items: center; justify-content: center;
+  font: 800 12px/1 'Plus Jakarta Sans', system-ui, sans-serif; box-shadow: 0 6px 16px -4px rgba(15, 23, 42, 0.45);
+}
+.fid-pin-tip { width: 0; height: 0; margin-top: -2px; border-left: 7px solid transparent; border-right: 7px solid transparent; border-top: 10px solid; }
+.fid-pin-pulse {
+  position: absolute; top: 0; left: 0; width: 100%; aspect-ratio: 1; border-radius: 9999px; border: 3px solid var(--c);
+  animation: pinPulse 1.6s ease-out infinite; pointer-events: none;
+}
+@keyframes pinPulse { from { transform: scale(1); opacity: 0.8; } to { transform: scale(2); opacity: 0; } }
+.fid-pin-active .fid-pin-head { box-shadow: 0 0 0 4px rgba(255,255,255,0.9), 0 10px 24px -6px rgba(15, 23, 42, 0.6); }
+.leaflet-popup-content-wrapper { border-radius: 18px; box-shadow: 0 20px 40px -12px rgba(15, 23, 42, 0.35); }
+.leaflet-popup-content { margin: 14px 16px; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+.leaflet-container { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+
+/* ---------------------------- Avatar frames ---------------------------- */
+@keyframes frameSpin { to { transform: rotate(360deg); } }
+.frame-spin { animation: frameSpin var(--spin, 6s) linear infinite; will-change: transform; }
+.frame-orbit { animation: frameSpin var(--orbit, 8s) linear infinite; }
+@keyframes framePulse { 0%, 100% { opacity: 0.35; transform: scale(0.97); } 50% { opacity: 0.85; transform: scale(1.04); } }
+.frame-pulse { animation: framePulse 2.4s ease-in-out infinite; }
+@keyframes frameHue { to { filter: hue-rotate(360deg); } }
+.frame-hue { animation: frameSpin var(--spin, 6s) linear infinite, frameHue 8s linear infinite; }
+.frame-live .orn-bob { animation: ornBob 2.6s ease-in-out infinite; }
+@keyframes ornBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.5px); } }
+.frame-live .orn-twinkle { transform-box: fill-box; transform-origin: center; animation: ornTwinkle 1.8s ease-in-out infinite; }
+@keyframes ornTwinkle { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.6); } }
+.frame-live .orn-flicker { animation: ornFlicker 0.9s ease-in-out infinite; }
+@keyframes ornFlicker { 0%, 100% { transform: scale(1, 1); } 30% { transform: scale(0.9, 1.15); } 60% { transform: scale(1.08, 0.92); } }
+.frame-live .orn-flap { animation: ornFlap 1.4s ease-in-out infinite; }
+@keyframes ornFlap { 0%, 100% { transform: scaleX(1) rotate(0); } 50% { transform: scaleX(0.82) rotate(-6deg); } }
+.frame-live .orn-beat { animation: ornBeat 1.1s ease-in-out infinite; }
+@keyframes ornBeat { 0%, 40%, 100% { transform: scale(1); } 15% { transform: scale(1.25); } 28% { transform: scale(1.05); } }
+.frame-live .orn-wiggle { animation: ornWiggle 2.2s ease-in-out infinite; }
+@keyframes ornWiggle { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-8deg); } 75% { transform: rotate(8deg); } }
+.frame-live .orn-spin-rev { animation: frameSpin 12s linear infinite reverse; }
+.orn-zap { opacity: 0; animation: ornZap 2.2s steps(1) infinite; }
+@keyframes ornZap { 0%, 100% { opacity: 0; } 8% { opacity: 1; } 12% { opacity: 0; } 16% { opacity: 1; } 22% { opacity: 0; } }
+.frame-paused, .frame-paused * { animation-play-state: paused !important; }
+.frame-paused:hover, .frame-paused:hover *, .group:hover .frame-paused, .group:hover .frame-paused *, tr:hover .frame-paused, tr:hover .frame-paused * {
+  animation-play-state: running !important;
+}
+.frame-paused .orn-zap { opacity: 0.85; }
+.frame-paused:hover .orn-zap, .group:hover .frame-paused .orn-zap, tr:hover .frame-paused .orn-zap { opacity: 0; }
+.frame-live .d2 { animation-delay: -0.6s !important; }
+.frame-live .d3 { animation-delay: -1.2s !important; }
+
+
+/* ---------------------------------------------------------------------- */
+/* Theme neutrals. Pages use Tailwind's slate/white utilities; for non-light */
+/* themes we remap them to the theme surface/text/line tokens.             */
+/* ---------------------------------------------------------------------- */
+html[data-theme]:not([data-theme="LIGHT"]) :is(.bg-white, .bg-white\/80, .bg-white\/85, .bg-white\/90) { background-color: rgb(var(--surface)) !important; }
+html[data-theme]:not([data-theme="LIGHT"]) :is(.bg-slate-50, .bg-\[\#F5F6FA\], .bg-gray-50) { background-color: rgb(var(--bg)) !important; }
+html[data-theme]:not([data-theme="LIGHT"]) .bg-\[\#F5F6FA\]\/80 { background-color: rgb(var(--bg) / 0.8) !important; }
+html[data-theme]:not([data-theme="LIGHT"]) :is(.bg-slate-100, .bg-slate-100\/80, .bg-slate-100\/90, .bg-slate-50\/80) { background-color: rgb(var(--surface-alt)) !important; }
+html[data-theme]:not([data-theme="LIGHT"]) :is(.border-slate-100, .border-slate-200, .border-slate-200\/60, .border-slate-200\/70, .border-slate-200\/80, .border-slate-300, .divide-slate-100 > *, .divide-slate-200 > *) { border-color: rgb(var(--line)) !important; }
+html[data-mode="dark"] :is(.text-slate-900, .text-slate-800, .text-slate-700, .text-gray-900) { color: rgb(var(--text)) !important; }
+html[data-mode="dark"] :is(.text-slate-600, .text-slate-500) { color: rgb(var(--muted)) !important; }
+html[data-mode="dark"] :is(.text-slate-400) { color: rgb(var(--faint)) !important; }
+html[data-mode="dark"] :is(.hover\:bg-slate-50:hover, .hover\:bg-slate-100:hover, .hover\:bg-slate-50\/80:hover) { background-color: rgb(var(--surface-alt)) !important; }
+html[data-mode="dark"] :is(input, select, textarea) { color: rgb(var(--text)); color-scheme: dark; }
+html[data-mode="dark"] :is(.bg-emerald-50, .bg-sky-50, .bg-amber-50, .bg-rose-50, .bg-indigo-50, .bg-violet-50) { background-color: rgb(var(--surface-alt)) !important; }
+html[data-mode="dark"] .shadow-soft { box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.6); }
+html[data-mode="dark"] .leaflet-popup-content-wrapper, html[data-mode="dark"] .leaflet-popup-tip { background: rgb(var(--surface)); color: rgb(var(--text)); }
+html { transition: background-color 0.4s ease; }
+
+/* ---------------------------- Theme decorations ---------------------------- */
+.decor-layer { position: fixed; inset: 0; pointer-events: none; z-index: 45; overflow: hidden; }
+.decor-item { position: absolute; top: -10%; will-change: transform; }
+@keyframes decorFall { from { transform: translate3d(0, -10vh, 0) rotate(0deg); } to { transform: translate3d(var(--sway, 40px), 115vh, 0) rotate(var(--rot, 360deg)); } }
+@keyframes decorRise { from { transform: translate3d(0, 115vh, 0); } to { transform: translate3d(var(--sway, 30px), -15vh, 0); } }
+@keyframes decorDrift { from { transform: translate3d(-15vw, 0, 0); } to { transform: translate3d(115vw, 0, 0); } }
+@keyframes decorTwinkle { 0%, 100% { opacity: 0.15; transform: scale(0.7); } 50% { opacity: 0.9; transform: scale(1.1); } }
+@keyframes decorBob { 0%, 100% { margin-top: 0; } 50% { margin-top: -14px; } }
+.decor-fall { animation: decorFall var(--dur, 14s) linear infinite; animation-delay: var(--delay, 0s); }
+.decor-rise { animation: decorRise var(--dur, 16s) linear infinite; animation-delay: var(--delay, 0s); top: 0; }
+.decor-drift { animation: decorDrift var(--dur, 40s) linear infinite; animation-delay: var(--delay, 0s); left: 0; }
+.decor-drift > * { animation: decorBob 3s ease-in-out infinite; }
+.decor-twinkle { animation: decorTwinkle var(--dur, 3s) ease-in-out infinite; animation-delay: var(--delay, 0s); }
+@keyframes monsterBlink { 0%, 94%, 100% { transform: scaleY(1); } 97% { transform: scaleY(0.1); } }
+.monster-eye { transform-box: fill-box; transform-origin: center; animation: monsterBlink 4s infinite; }
+
+/* ---------------------------- Timeline ---------------------------- */
+@keyframes heartBurst { 0% { transform: scale(0.2); opacity: 0; } 25% { transform: scale(1.15); opacity: 1; } 45% { transform: scale(0.95); } 70% { opacity: 1; } 100% { transform: scale(1.3); opacity: 0; } }
+.heart-burst { animation: heartBurst 0.8s cubic-bezier(0.2, 0, 0, 1) forwards; }
+@keyframes likePop { 0% { transform: scale(0.6); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+.like-pop { animation: likePop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+@keyframes liveToast { from { opacity: 0; transform: translateY(-24px) scale(0.96); } to { opacity: 1; transform: none; } }
+.live-toast { animation: liveToast 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }

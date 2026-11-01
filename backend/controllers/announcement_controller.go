@@ -75,6 +75,7 @@ func CreateAnnouncement(c *gin.Context) {
 	}
 
 	config.DB.Preload("Author").First(&announcement, announcement.ID)
+	Broadcast("announcement", gin.H{"action": "created", "announcement": announcement})
 	c.JSON(http.StatusCreated, announcement)
 }
 
@@ -124,6 +125,7 @@ func UpdateAnnouncement(c *gin.Context) {
 	}
 
 	config.DB.Preload("Author").First(&announcement, announcement.ID)
+	Broadcast("announcement", gin.H{"action": "updated", "announcement": announcement})
 	c.JSON(http.StatusOK, announcement)
 }
 
@@ -141,5 +143,6 @@ func DeleteAnnouncement(c *gin.Context) {
 		return
 	}
 
+	Broadcast("announcement", gin.H{"action": "deleted", "id": id})
 	c.JSON(http.StatusOK, gin.H{"message": "Announcement deleted successfully"})
 }

@@ -51,6 +51,14 @@ export default function Announcements() {
     fetchAnnouncements();
   }, []);
 
+  // Live: refetch whenever an announcement is created/updated/deleted anywhere.
+  useEffect(() => {
+    const onLive = () => fetchAnnouncements();
+    window.addEventListener('live:announcement', onLive);
+    return () => window.removeEventListener('live:announcement', onLive);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const fetchAnnouncements = async () => {
     setLoading(true);
     setError('');

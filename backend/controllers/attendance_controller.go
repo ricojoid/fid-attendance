@@ -12,22 +12,28 @@ import (
 )
 
 type CheckInRequest struct {
-	Lat     float64 `json:"lat" binding:"required"`
-	Long    float64 `json:"long" binding:"required"`
-	Address string  `json:"address"`
+	Lat      float64 `json:"lat" binding:"required"`
+	Long     float64 `json:"long" binding:"required"`
+	Address  string  `json:"address"`
+	Accuracy float64 `json:"accuracy"` // metres
+	Note     string  `json:"note"`
 }
 
-type CheckOutRequest struct {
-	Lat     float64 `json:"lat" binding:"required"`
-	Long    float64 `json:"long" binding:"required"`
-	Address string  `json:"address"`
+type CheckOutRequest = CheckInRequest
+
+func clip(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if len(s) > n {
+		return s[:n]
+	}
+	return s
 }
 
 type CorrectionRequest struct {
-	AttendanceDate   string `json:"attendance_date" binding:"required"` // YYYY-MM-DD
-	CorrectedCheckIn  string `json:"corrected_check_in"`                // HH:MM or ISO
-	CorrectedCheckOut string `json:"corrected_check_out"`               // HH:MM or ISO
-	Reason           string `json:"reason" binding:"required"`
+	AttendanceDate    string `json:"attendance_date" binding:"required"` // YYYY-MM-DD
+	CorrectedCheckIn  string `json:"corrected_check_in"`                 // HH:MM or ISO
+	CorrectedCheckOut string `json:"corrected_check_out"`                // HH:MM or ISO
+	Reason            string `json:"reason" binding:"required"`
 }
 
 func CheckIn(c *gin.Context) {
@@ -56,13 +62,16 @@ func CheckIn(c *gin.Context) {
 	}
 
 	attendance := models.Attendance{
-		UserID:         userID,
-		Date:           today,
-		CheckInTime:    &now,
-		CheckInLat:     req.Lat,
-		CheckInLong:    req.Long,
-		CheckInAddress: req.Address,
-		Status:         status,
+		UserID:          userID,
+		Date:            today,
+		CheckInTime:     &now,
+		CheckInLat:      req.Lat,
+		CheckInLong:     req.Long,
+		CheckInAddress:  clip(req.Address, 255),
+		CheckInAccuracy: req.Accuracy,
+		CheckInNote:     clip(req.Note, 1000),
+		Source:          "LIVE",
+		Status:          status,
 	}
 
 	if err := config.DB.Create(&attendance).Error; err != nil {
@@ -70,6 +79,7 @@ func CheckIn(c *gin.Context) {
 		return
 	}
 
+	syncBadgesAsync(userID)
 	c.JSON(http.StatusCreated, gin.H{"message": "Check-in successful", "data": attendance})
 }
 
@@ -100,13 +110,16 @@ func CheckOut(c *gin.Context) {
 	attendance.CheckOutTime = &now
 	attendance.CheckOutLat = req.Lat
 	attendance.CheckOutLong = req.Long
-	attendance.CheckOutAddress = req.Address
+	attendance.CheckOutAddress = clip(req.Address, 255)
+	attendance.CheckOutAccuracy = req.Accuracy
+	attendance.CheckOutNote = clip(req.Note, 1000)
 
 	if err := config.DB.Save(&attendance).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to record check-out"})
 		return
 	}
 
+	syncBadgesAsync(userID)
 	c.JSON(http.StatusOK, gin.H{"message": "Check-out successful", "data": attendance})
 }
 
@@ -209,21 +222,26 @@ func RequestCorrection(c *gin.Context) {
 	var user models.User
 	config.DB.First(&user, userID)
 
+	approverUser := resolveApproverFor(&user)
+	sentTo := ""
+	if approverUser != nil {
+		sentTo = fmt.Sprintf(" It has been sent to %s for approval.", approverUser.Name)
+	}
+
 	// 1. Notification for submitter user
 	notifSubmitter := models.Notification{
 		UserID:    userID,
 		Title:     "Attendance Correction Submitted: PENDING",
-		Message:   fmt.Sprintf("Your attendance correction for date %s has been submitted successfully.", req.AttendanceDate),
+		Message:   fmt.Sprintf("Your attendance correction for date %s has been submitted successfully.%s", req.AttendanceDate, sentTo),
 		Type:      "ATTENDANCE",
 		Status:    "PENDING",
 		CreatedAt: time.Now(),
 	}
 	config.DB.Create(&notifSubmitter)
 
-	// 2. Notification for approver user if assigned
-	if user.ApproverName != "" {
-		var approverUser models.User
-		if err := config.DB.Where("LOWER(name) = LOWER(?)", strings.TrimSpace(user.ApproverName)).First(&approverUser).Error; err == nil {
+	// 2. Notify whoever is responsible for approving (mapped approver or hierarchy fallback)
+	if approverUser != nil {
+		{
 			notifApprover := models.Notification{
 				UserID:    approverUser.ID,
 				Title:     "Approval Request: Attendance Correction",
@@ -236,7 +254,7 @@ func RequestCorrection(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Attendance correction submitted successfully", "data": correction})
+	c.JSON(http.StatusCreated, gin.H{"message": "Attendance correction submitted successfully", "data": correction, "approver": approverSummary(approverUser)})
 }
 
 func GetCorrectionHistory(c *gin.Context) {
@@ -362,13 +380,21 @@ func GetAllUsersAttendance(c *gin.Context) {
 		Role         string     `json:"role"`
 		Department   string     `json:"department"`
 		AvatarURL    string     `json:"avatar_url"`
+		AvatarFrame  string     `json:"avatar_frame"`
 		Date         string     `json:"date"`
 		Status       string     `json:"status"` // PRESENT, LATE, LEAVE, ABSENT
 		CheckInTime  *time.Time `json:"check_in_time"`
 		CheckOutTime *time.Time `json:"check_out_time"`
 		Location     string     `json:"location"`
 		Notes        string     `json:"notes"`
+		TopBadge     *TopBadge  `json:"top_badge"`
 	}
+
+	userIDs := make([]uint, len(users))
+	for i, u := range users {
+		userIDs[i] = u.ID
+	}
+	tops := topBadgesFor(userIDs)
 
 	var results []UserAttendanceItem
 	presentCount := 0
@@ -378,14 +404,16 @@ func GetAllUsersAttendance(c *gin.Context) {
 
 	for _, u := range users {
 		item := UserAttendanceItem{
-			UserID:     u.ID,
-			Name:       u.Name,
-			NIP:        u.NIP,
-			Email:      u.Email,
-			Role:       u.Role,
-			Department: u.Department,
-			AvatarURL:  u.AvatarURL,
-			Date:       dateStr,
+			UserID:      u.ID,
+			Name:        u.Name,
+			NIP:         u.NIP,
+			Email:       u.Email,
+			Role:        u.Role,
+			Department:  u.Department,
+			AvatarURL:   u.AvatarURL,
+			AvatarFrame: u.AvatarFrame,
+			Date:        dateStr,
+			TopBadge:    tops[u.ID],
 		}
 
 		if att, exists := attMap[u.ID]; exists {

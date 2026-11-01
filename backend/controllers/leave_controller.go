@@ -3,7 +3,6 @@ package controllers
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -36,6 +35,25 @@ func SubmitLeave(c *gin.Context) {
 		return
 	}
 
+	start, errS := time.Parse("2006-01-02", req.StartDate)
+	end, errE := time.Parse("2006-01-02", req.EndDate)
+	if errS != nil || errE != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dates must use the YYYY-MM-DD format"})
+		return
+	}
+	if end.Before(start) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "End date cannot be before start date"})
+		return
+	}
+	var overlap int64
+	config.DB.Model(&models.LeaveRequest{}).
+		Where("user_id = ? AND status IN ? AND start_date <= ? AND end_date >= ?", userID, []string{"PENDING", "APPROVED"}, req.EndDate, req.StartDate).
+		Count(&overlap)
+	if overlap > 0 {
+		c.JSON(http.StatusConflict, gin.H{"error": "You already have a pending or approved leave overlapping these dates"})
+		return
+	}
+
 	leaveReq := models.LeaveRequest{
 		UserID:      userID,
 		LeaveTypeID: req.LeaveTypeID,
@@ -60,21 +78,26 @@ func SubmitLeave(c *gin.Context) {
 		leaveTypeName = leaveReq.LeaveType.Name
 	}
 
+	approverUser := resolveApproverFor(&user)
+	sentTo := ""
+	if approverUser != nil {
+		sentTo = fmt.Sprintf(" It has been sent to %s for approval.", approverUser.Name)
+	}
+
 	// 1. Notification for submitter user
 	notifSubmitter := models.Notification{
 		UserID:    userID,
 		Title:     fmt.Sprintf("%s Submitted: PENDING", leaveTypeName),
-		Message:   fmt.Sprintf("Your %s for %s to %s has been submitted successfully.", leaveTypeName, req.StartDate, req.EndDate),
+		Message:   fmt.Sprintf("Your %s for %s to %s has been submitted successfully.%s", leaveTypeName, req.StartDate, req.EndDate, sentTo),
 		Type:      "LEAVE",
 		Status:    "PENDING",
 		CreatedAt: time.Now(),
 	}
 	config.DB.Create(&notifSubmitter)
 
-	// 2. Notification for approver user if assigned
-	if user.ApproverName != "" {
-		var approverUser models.User
-		if err := config.DB.Where("LOWER(name) = LOWER(?)", strings.TrimSpace(user.ApproverName)).First(&approverUser).Error; err == nil {
+	// 2. Notify whoever is responsible for approving (mapped approver or hierarchy fallback)
+	if approverUser != nil {
+		{
 			notifApprover := models.Notification{
 				UserID:    approverUser.ID,
 				Title:     fmt.Sprintf("Approval Request: %s", leaveTypeName),
@@ -87,7 +110,7 @@ func SubmitLeave(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Leave request submitted successfully", "data": leaveReq})
+	c.JSON(http.StatusCreated, gin.H{"message": "Leave request submitted successfully", "data": leaveReq, "approver": approverSummary(approverUser)})
 }
 
 func GetLeaveHistory(c *gin.Context) {

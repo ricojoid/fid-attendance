@@ -44,31 +44,63 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		secret = "super-secret-attendance-key-2026"
-	}
-
-	claims := jwt.MapClaims{
-		"user_id": user.ID,
-		"nip":     user.NIP,
-		"email":   user.Email,
-		"role":    user.Role,
-		"exp":     time.Now().AddDate(100, 0, 0).Unix(), // Permanent token until logout (100 years)
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(secret))
+	tokenString, expiresAt, err := issueToken(user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Login successful",
-		"token":   tokenString,
-		"user":    user,
+		"message":    "Login successful",
+		"token":      tokenString,
+		"expires_at": expiresAt,
+		"user":       user,
 	})
+}
+
+// SessionIdleTimeout is a sliding window: every time the app is opened the
+// client calls /auth/refresh and gets a fresh token valid for another 30 days.
+// A user is logged out only after 30 days without opening the app.
+const SessionIdleTimeout = 30 * 24 * time.Hour
+
+func jwtSecret() []byte {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		secret = "super-secret-attendance-key-2026"
+	}
+	return []byte(secret)
+}
+
+func issueToken(user models.User) (string, time.Time, error) {
+	now := time.Now()
+	exp := now.Add(SessionIdleTimeout)
+	claims := jwt.MapClaims{
+		"user_id": user.ID,
+		"nip":     user.NIP,
+		"email":   user.Email,
+		"role":    user.Role,
+		"iat":     now.Unix(),
+		"exp":     exp.Unix(),
+	}
+	s, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(jwtSecret())
+	return s, exp, err
+}
+
+// RefreshToken (POST /auth/refresh) slides the 30-day session forward.
+// Requires a still-valid token, so an expired session cannot be revived.
+func RefreshToken(c *gin.Context) {
+	userID := c.MustGet("userID").(uint)
+	var user models.User
+	if err := config.DB.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User no longer exists"})
+		return
+	}
+	tokenString, expiresAt, err := issueToken(user)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to refresh session"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"token": tokenString, "expires_at": expiresAt, "user": user})
 }
 
 func GetMe(c *gin.Context) {
@@ -80,7 +112,7 @@ func GetMe(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"user": user})
+	c.JSON(http.StatusOK, gin.H{"user": user, "approver": approverSummary(resolveApproverFor(&user))})
 }
 
 func UpdateProfile(c *gin.Context) {

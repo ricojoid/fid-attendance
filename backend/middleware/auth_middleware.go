@@ -16,6 +16,13 @@ import (
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
+		// Browsers' EventSource cannot send headers, so the live-events stream
+		// (and only it) may pass the token as a query parameter.
+		if authHeader == "" && strings.HasSuffix(c.Request.URL.Path, "/events") {
+			if t := c.Query("access_token"); t != "" {
+				authHeader = "Bearer " + t
+			}
+		}
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization token required"})
 			c.Abort()
@@ -26,6 +33,12 @@ func AuthMiddleware() gin.HandlerFunc {
 		secret := os.Getenv("JWT_SECRET")
 		if secret == "" {
 			secret = "super-secret-attendance-key-2026"
+		}
+
+		if strings.TrimSpace(tokenString) == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization token required"})
+			c.Abort()
+			return
 		}
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -56,7 +69,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		}
 
 		userID := uint(userIDFloat)
-		role := claims["role"].(string)
+		role, _ := claims["role"].(string)
 
 		c.Set("userID", userID)
 		c.Set("userRole", role)
@@ -96,8 +109,9 @@ func AuditLogMiddleware(actionName string) gin.HandlerFunc {
 				CreatedAt: time.Now(),
 			}
 
+			// Write the audit row off the request path so it never adds latency.
 			if config.DB != nil {
-				config.DB.Create(&logH)
+				go config.DB.Create(&logH)
 			}
 		}
 	}

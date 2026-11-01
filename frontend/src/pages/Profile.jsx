@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/client';
+import { MASTER_DEPARTMENTS } from '../constants';
+import { Link } from 'react-router-dom';
+import BadgeMedal, { NameBadge, StreakFlame } from '../components/BadgeMedal';
+import { useBadges } from '../hooks/useBadges';
+import { fileToAvatarDataUrl } from '../utils/image';
+import AvatarFrame from '../components/AvatarFrame';
+import FramePicker from '../components/FramePicker';
+import ThemePicker from '../components/ThemePicker';
 import {
   User,
   Mail,
@@ -15,6 +23,7 @@ import {
   Eye,
   EyeOff,
   BadgeCheck,
+  Camera,
   RotateCcw,
   UserCheck,
   Hash,
@@ -23,6 +32,32 @@ import {
 
 export default function Profile() {
   const { user, updateUserProfile } = useAuth();
+  const { data: badgeData } = useBadges();
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [framesOpen, setFramesOpen] = useState(false);
+  const [themesOpen, setThemesOpen] = useState(false);
+
+  // Same endpoint the mobile app uses, so the photo is shared everywhere.
+  const handlePhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPhotoBusy(true);
+    setError('');
+    try {
+      const dataUrl = await fileToAvatarDataUrl(file);
+      const res = await api.put('/profile', { avatar_url: dataUrl });
+      updateUserProfile({ ...user, ...res.data.user });
+      setSuccess('Profile photo updated on web and mobile ✨');
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || 'Failed to upload photo');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+  const stats = badgeData?.stats || {};
+  const earned = (badgeData?.badges || []).filter((b) => b.earned).sort((a, b) => b.tier - a.tier);
+  const topBadge = earned[0] ? { ...earned[0], count: earned.length } : null;
   const [name, setName] = useState(user?.name || '');
   const [department, setDepartment] = useState(user?.department || 'App Dev & Data AI');
   const [birthDate, setBirthDate] = useState(user?.birth_date || '');
@@ -80,7 +115,7 @@ export default function Profile() {
       }
 
       const res = await api.put('/profile', payload);
-      updateUserProfile(res.data.user);
+      updateUserProfile({ ...user, ...res.data.user });
       setSuccess('Profile updated successfully.');
       setPassword('');
       setConfirmPassword('');
@@ -129,6 +164,18 @@ export default function Profile() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-fade-in pb-12">
+      {themesOpen && (
+        <ThemePicker onClose={() => setThemesOpen(false)} onChanged={(code) => updateUserProfile({ ...user, app_theme: code })} />
+      )}
+      {framesOpen && (
+        <FramePicker
+          mode="self"
+          avatar={user?.avatar_url}
+          name={user?.name}
+          onClose={() => setFramesOpen(false)}
+          onChanged={(code) => updateUserProfile({ ...user, avatar_frame: code })}
+        />
+      )}
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div>
@@ -203,18 +250,60 @@ export default function Profile() {
             {/* Avatar & Summary */}
             <div className="px-6 pb-6 pt-0 relative">
               <div className="-mt-12 mb-4 flex items-end justify-between">
-                <div className="w-20 h-20 rounded-2xl bg-slate-900 p-1 ring-4 ring-slate-950 shadow-2xl relative">
-                  <div className="w-full h-full rounded-xl bg-gradient-to-tr from-red-600 to-rose-500 text-white font-extrabold text-2xl flex items-center justify-center shadow-inner">
-                    {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-                  </div>
-                  <span className="absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 ring-2 ring-slate-900" />
-                </div>
+                <label
+                  className="group rounded-full relative cursor-pointer"
+                  title="Change profile photo"
+                >
+                  <AvatarFrame frame={user?.avatar_frame} src={user?.avatar_url} name={user?.name} size={72} rounded="xl" />
+                  <span className="absolute inset-[18%] rounded-full bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] font-bold">
+                    {photoBusy ? 'Uploading…' : 'Change'}
+                  </span>
+                  <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-xl bg-brand-500 ring-2 ring-slate-950 flex items-center justify-center">
+                    <Camera className="w-3.5 h-3.5" />
+                  </span>
+                  <input type="file" accept="image/*" className="hidden" onChange={handlePhoto} disabled={photoBusy} />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setFramesOpen(true)}
+                  className="mb-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-br from-amber-300 to-orange-500 text-slate-900 text-xs font-extrabold shadow-lg hover:brightness-105 active:scale-95 transition-all"
+                >
+                  ✨ Avatar frames
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setThemesOpen(true)}
+                  className="mb-1 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 border border-white/15 text-white text-xs font-extrabold hover:bg-white/20 active:scale-95 transition-all"
+                >
+                  🎨 Theme
+                </button>
               </div>
 
               <div>
-                <h2 className="text-lg font-bold text-white tracking-tight">{user?.name || 'User'}</h2>
+                <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-1.5">
+                  {user?.name || 'User'}
+                  {topBadge && <NameBadge top={topBadge} size={26} />}
+                </h2>
                 <p className="text-xs text-slate-400 font-mono mt-0.5">{user?.email || '-'}</p>
               </div>
+
+              {/* Streak & badges */}
+              <Link
+                to="/achievements"
+                className="mt-5 flex items-center gap-3 p-3 rounded-2xl bg-white/[0.06] border border-white/10 hover:bg-white/[0.1] transition-colors"
+              >
+                <StreakFlame size={30} lit={(stats.current_streak || 0) > 0 && stats.streak_alive_today !== false} />
+                <div>
+                  <p className="text-xl font-extrabold text-white leading-none tabular-nums">{stats.current_streak ?? 0}</p>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">day streak</p>
+                </div>
+                <div className="ml-auto flex -space-x-2">
+                  {earned.slice(0, 4).map((b) => (
+                    <BadgeMedal key={b.code} badge={b} size={34} showProgress={false} />
+                  ))}
+                  {earned.length === 0 && <span className="text-[11px] text-slate-400 font-semibold">No badges yet</span>}
+                </div>
+              </Link>
 
               {/* Info Badges & Details */}
               <div className="mt-6 pt-6 border-t border-slate-800/80 space-y-3">
@@ -241,7 +330,7 @@ export default function Profile() {
                     <UserCheck className="w-3.5 h-3.5 text-red-400" /> Approver
                   </span>
                   <span className="font-medium text-slate-200">
-                    {user?.approver_name || 'Dina (Default)'}
+                    {user?.approver?.name || user?.approver_name || 'Not assigned'}
                   </span>
                 </div>
 
