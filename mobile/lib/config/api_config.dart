@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 class ApiConfig {
   // Flag to toggle between local Go backend (port 8080) and production VPS
-  static bool useLocalBackend = true;
+  static bool useLocalBackend = false;
 
   /// Optional build-time override, e.g.
   /// `flutter run --dart-define=API_BASE_URL=https://staging.example.com/api/v1`
@@ -10,7 +10,7 @@ class ApiConfig {
 
   static String get baseUrl {
     if (_baseUrlOverride.isNotEmpty) return _baseUrlOverride;
-    if (useLocalBackend) {
+    if (useLocalBackend && !kReleaseMode) {
       return 'http://localhost:8080/api/v1';
     }
     if (kIsWeb) {
