@@ -6,7 +6,7 @@ COPY . .
 
 RUN flutter config --enable-web
 RUN flutter pub get
-RUN flutter build web --release --pwa-strategy=offline-first
+RUN flutter build web --release --pwa-strategy=offline-first --dart-define=API_BASE_URL=/api/v1
 
 # Stage 2: Serve via Nginx
 FROM nginx:alpine
